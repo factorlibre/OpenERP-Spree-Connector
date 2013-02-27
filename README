@@ -1,0 +1,7 @@
+Spree Commerce Connector
+Openerp-version: 6.1
+
+Dependencies:
+https://code.launchpad.net/~extra-addons-commiter/e-commerce-addons/oerp6.1-stable
+https://code.launchpad.net/~extra-addons-commiter/product-extra-addons/oerp6.1-stable
+https://code.launchpad.net/~extra-addons-commiter/openobject-extension/oerp6.1-stable
