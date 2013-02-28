@@ -40,10 +40,10 @@ def call_spree_method(self, cr, uid, external_session, method_url, method='get',
     if not hasattr(requests, method):
         _logger.warning("Requests has no method %s" % (method))
     ext_ref = external_session.referential_id
-    url = "%s/api/%s" % (ext_ref.location, ext_ref.method_url)
+    url = "%s/api/%s" % (ext_ref.location, method_url)
     headers = {'content-type': 'aplication/json', 'X-Spree-Token': ext_ref.apipass}
 
-    res = getattr(requests, method)(url, headers)
+    res = getattr(requests, method)(url, headers=headers)
     if res.status_code != requests.codes.ok:
         raise osv.except_osv(_('Error'), _('Spree HTTP Response error. URL: %s Code: %s' % (url, res.status_code)))
     if isinstance(res.json, list) or isinstance(res.json, dict):
@@ -54,7 +54,7 @@ def call_spree_method(self, cr, uid, external_session, method_url, method='get',
 
 @override(osv.osv, 'spree_')
 @only_for_referential('spree')
-def _get_external_resources(self, cr, uid, external_session, external_id, resource_filter=None, mapping=None, fields=None, context=None):
+def _get_external_resources(self, cr, uid, external_session, resource_filter=None, mapping=None, fields=None, page=1, context=None):
     search_vals = [('model', '=', self._name), ('referential_id', '=', external_session.referential_id.id)]
     mapping_ids = self.pool.get('external.mapping').search(cr, uid, search_vals)
     if mapping is None:
@@ -63,9 +63,86 @@ def _get_external_resources(self, cr, uid, external_session, external_id, resour
     ext_ref = external_session.referential_id
     headers = {'content-type': 'aplication/json', 'X-Spree-Token': ext_ref.apipass}
 
-    url = "%s/%s" % (ext_method, external_id)
-
+    url = "%s?page=%s" % (ext_method, page)
     resource = self.call_spree_method(cr, uid, external_session, url, method='get', context=context)
     return resource
 
+@override(osv.osv, 'spree_')
+@only_for_referential('spree')
+def _import_resources(self, cr, uid, external_session, defaults=None, method="search_then_read", context=None):
+    """Abstract function to import resources form a specific object (like shop, referential...)
 
+    :param ExternalSession external_session : External_session that contain all params of connection
+    :param dict defaults: default value for the resource to create
+    :param str method: method used for importing the resource (
+                        search_then_read,
+                        search_then_read_no_loop,
+                        search_read,
+                        search_read_no_loop )
+    :rtype: dict
+    :return: dictionary with the key "create_ids" and "write_ids" which containt the id created/written
+    """
+    external_session.logger.info("Start to import the ressource %s"%(self._name,))
+    result = {"create_ids" : [], "write_ids" : []}
+    mapping, mapping_id = self._init_mapping(cr, uid, external_session.referential_id.id, context=context)
+
+    if mapping[mapping_id].get('mapping_lines', False):
+        external_resource_name = mapping[mapping_id]['external_resource_name']
+        step = self._get_import_step(cr, uid, external_session, context=context)
+        resource_filter = None
+        #TODO refactor improve and simplify this code
+        if method == 'search_then_read':
+            page = 1
+            resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
+            #paginated results in spree
+            resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
+            #total_pages = resources.get('pages', 1)
+            total_pages = 1
+            while page <= total_pages:
+                resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
+                if resources.get(external_resource_name, False):
+                    resources = resources[external_resource_name]
+                if not isinstance(resources, list):
+                    resources = [resources]
+                res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+                for key in result:
+                    result[key].append(res.get(key, []))
+                page += 1
+                
+        elif method == 'search_then_read_no_loop':
+            #Magento API do not support step import so we can not use a loop
+            resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
+            ext_ids = self._get_external_resource_ids(cr, uid, external_session, resource_filter, mapping=mapping, context=context)
+            for ext_id in ext_ids:
+                #TODO import only the field needed to improve speed import ;)
+                resources = self._get_external_resources(cr, uid, external_session, ext_id, mapping=mapping, fields=None, context=context)
+                if resources:
+                    if not isinstance(resources, list):
+                        resources = [resources]
+                    res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+                    for key in result:
+                        result[key].append(res.get(key, []))
+        elif method == 'search_read':
+            while True:
+                resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
+                #TODO import only the field needed to improve speed import ;)
+                resources = self._get_external_resources(cr, uid, external_session, resource_filter=resource_filter, mapping=mapping, fields=None, context=context)
+                if not resources:
+                    break
+                if not isinstance(resources, list):
+                    resources = [resources]
+                res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+                for key in result:
+                    result[key].append(res.get(key, []))
+        elif method == 'search_read_no_loop':
+            #Magento API do not support step import so we can not use a loop
+            resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
+            #TODO import only the field needed to improve speed import ;)
+            resources = self._get_external_resources(cr, uid, external_session, resource_filter=resource_filter, mapping=mapping, fields=None, context=context)
+            if resources:
+                if not isinstance(resources, list):
+                    resources = [resources]
+                res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+                for key in result:
+                    result[key].append(res.get(key, []))
+    return result
