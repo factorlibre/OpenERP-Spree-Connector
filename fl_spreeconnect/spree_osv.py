@@ -22,7 +22,7 @@
 
 from osv import osv, fields
 from base_external_referentials.decorator import only_for_referential, commit_now
-from base_external_referentials.external_osv import override, extend
+from base_external_referentials.external_osv import override, extend, ExternalSession
 from tools.translate import _
 from datetime import datetime
 from openerp.tools import DEFAULT_SERVER_DATETIME_FORMAT
@@ -32,18 +32,19 @@ import logging
 _logger = logging.getLogger(__name__)
 
 @extend(osv.osv)
-def call_spree_method(self, cr, uid, external_session, method_url, method='get', context=None):
+def call_spree_method(self, cr, uid, external_session, method_url, method='GET', params=None, context=None):
     """
     :param string method_url: part of url that contains the method to call, for example products/3 to obtain the product with id 3
     :param string method: REST Method to be used 
     """
-    if not hasattr(requests, method):
-        _logger.warning("Requests has no method %s" % (method))
+    if params is None:
+        params = {}
+    
     ext_ref = external_session.referential_id
     url = "%s/api/%s" % (ext_ref.location, method_url)
     headers = {'content-type': 'aplication/json', 'X-Spree-Token': ext_ref.apipass}
 
-    res = getattr(requests, method)(url, headers=headers)
+    res = requests.request(method, url, headers=headers, params=params)
     if res.status_code != requests.codes.ok:
         raise osv.except_osv(_('Error'), _('Spree HTTP Response error. URL: %s Code: %s' % (url, res.status_code)))
     if isinstance(res.json, list) or isinstance(res.json, dict):
@@ -63,22 +64,19 @@ def _get_external_resources(self, cr, uid, external_session, resource_filter=Non
     ext_ref = external_session.referential_id
     headers = {'content-type': 'aplication/json', 'X-Spree-Token': ext_ref.apipass}
 
-    url = "%s?page=%s" % (ext_method, page)
-    resource = self.call_spree_method(cr, uid, external_session, url, method='get', context=context)
+    url = ext_method
+    params = {'page': page}
+    resource = self.call_spree_method(cr, uid, external_session, url, method='GET', params=params, context=context)
     return resource
 
+#No import method needed for spree. Read and search on the same call to the api
 @override(osv.osv, 'spree_')
 @only_for_referential('spree')
-def _import_resources(self, cr, uid, external_session, defaults=None, method="search_then_read", context=None):
+def _import_resources(self, cr, uid, external_session, defaults=None, context=None):
     """Abstract function to import resources form a specific object (like shop, referential...)
 
     :param ExternalSession external_session : External_session that contain all params of connection
     :param dict defaults: default value for the resource to create
-    :param str method: method used for importing the resource (
-                        search_then_read,
-                        search_then_read_no_loop,
-                        search_read,
-                        search_read_no_loop )
     :rtype: dict
     :return: dictionary with the key "create_ids" and "write_ids" which containt the id created/written
     """
@@ -90,59 +88,52 @@ def _import_resources(self, cr, uid, external_session, defaults=None, method="se
         external_resource_name = mapping[mapping_id]['external_resource_name']
         step = self._get_import_step(cr, uid, external_session, context=context)
         resource_filter = None
-        #TODO refactor improve and simplify this code
-        if method == 'search_then_read':
-            page = 1
-            resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
-            #paginated results in spree
+
+        page = 1
+        resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
+        #paginated results in spree
+        resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
+        total_pages = resources.get('pages', 1)
+        total_pages = 1
+        while page <= total_pages:
             resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
-            #total_pages = resources.get('pages', 1)
-            total_pages = 1
-            while page <= total_pages:
-                resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
-                if resources.get(external_resource_name, False):
-                    resources = resources[external_resource_name]
-                if not isinstance(resources, list):
-                    resources = [resources]
-                res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
-                for key in result:
-                    result[key].append(res.get(key, []))
-                page += 1
-                
-        elif method == 'search_then_read_no_loop':
-            #Magento API do not support step import so we can not use a loop
-            resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
-            ext_ids = self._get_external_resource_ids(cr, uid, external_session, resource_filter, mapping=mapping, context=context)
-            for ext_id in ext_ids:
-                #TODO import only the field needed to improve speed import ;)
-                resources = self._get_external_resources(cr, uid, external_session, ext_id, mapping=mapping, fields=None, context=context)
-                if resources:
-                    if not isinstance(resources, list):
-                        resources = [resources]
-                    res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
-                    for key in result:
-                        result[key].append(res.get(key, []))
-        elif method == 'search_read':
-            while True:
-                resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
-                #TODO import only the field needed to improve speed import ;)
-                resources = self._get_external_resources(cr, uid, external_session, resource_filter=resource_filter, mapping=mapping, fields=None, context=context)
-                if not resources:
-                    break
-                if not isinstance(resources, list):
-                    resources = [resources]
-                res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
-                for key in result:
-                    result[key].append(res.get(key, []))
-        elif method == 'search_read_no_loop':
-            #Magento API do not support step import so we can not use a loop
-            resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
-            #TODO import only the field needed to improve speed import ;)
-            resources = self._get_external_resources(cr, uid, external_session, resource_filter=resource_filter, mapping=mapping, fields=None, context=context)
-            if resources:
-                if not isinstance(resources, list):
-                    resources = [resources]
-                res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
-                for key in result:
-                    result[key].append(res.get(key, []))
+            if resources.get(external_resource_name, False):
+                resources = resources[external_resource_name]
+            if not isinstance(resources, list):
+                resources = [resources]
+            res = self._record_external_resources(cr, uid, external_session, resources, defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+            for key in result:
+                result[key].append(res.get(key, []))
+            page += 1
+    return result
+
+#No import method needed for spree. Read and search on the same call to the api
+@override(osv.osv, 'spree_')
+@only_for_referential('spree')
+def import_resources(self, cr, uid, ids, resource_name, context=None):
+    """Abstract function to import resources from a shop / a referential...
+
+    :param list ids: list of id
+    :param str ressource_name: the resource name to import
+    :param str method: method used for importing the resource (search_then_read,
+                            search_then_read_no_loop, search_read, search_read_no_loop )
+    :rtype: dict
+    :return: dictionary with the key "create_ids" and "write_ids" which containt the id created/written
+    """
+    if context is None: context={}
+    result = {"create_ids" : [], "write_ids" : []}
+    for browse_record in self.browse(cr, uid, ids, context=context):
+        if browse_record._name == 'external.referential':
+            external_session = ExternalSession(browse_record, browse_record)
+        else:
+            if hasattr(browse_record, 'referential_id'):
+                context['%s_id'%browse_record._name.replace('.', '_')] = browse_record.id
+                external_session = ExternalSession(browse_record.referential_id, browse_record)
+            else:
+                raise except_osv(_("Not Implemented"),
+                                     _("The field referential_id doesn't exist on the object %s. Reporting system can not be used") % (browse_record._name,))
+        defaults = self.pool.get(resource_name)._get_default_import_values(cr, uid, external_session, context=context)
+        res = self.pool.get(resource_name)._import_resources(cr, uid, external_session, defaults, context=context)
+        for key in result:
+            result[key].append(res.get(key, []))
     return result
