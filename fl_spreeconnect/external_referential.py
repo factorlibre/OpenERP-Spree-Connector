@@ -28,6 +28,7 @@ from base_external_referentials.decorator import only_for_referential
 from base_external_referentials.external_referentials import REF_VISIBLE_FIELDS
 
 import requests
+from datetime import datetime
 
 REF_VISIBLE_FIELDS['Spree'] = ['location', 'apipass']
 
@@ -36,17 +37,27 @@ class external_referential(osv.osv):
 
     _lang_support = 'fields_with_main_lang'
 
+    _columns = {
+        'last_product_import_date': fields.datetime('Date of last product import', readonly=True)
+    }
+
     @only_for_referential('spree')
     def external_connection(self, cr, uid, id, debug=False, logger=False, context=None):
         if isinstance(id, list):
             id = id[0]
         referential = self.browse(cr, uid, id, context=context)
-        # headers = {'content-type': 'application/json', 'X-Spree-Token': referential.apipass}
-        # connection = requests.get("%s/api/products.json" % referential.location, headers=headers)
-        # if connection.status_code != requests.codes.ok:
-        #     if config['debug_mode']: raise
-        #     raise osv.except_osv(_("Connection Error"), _("Could not connect to the Spree webservice\nCheck the webservice URL and password\nHTTP error code: %s"%connection.status_code))
-        # print connection.json
+        headers = {'content-type': 'application/json', 'X-Spree-Token': referential.apipass}
+        #Test connection returning headers
+        connection = requests.head("%s/api/products.json" % referential.location, headers=headers)
+        if connection.status_code != requests.codes.ok:
+            if config['debug_mode']: raise
+            raise osv.except_osv(_("Connection Error"), _("Could not connect to the Spree webservice\nCheck the webservice URL and password\nHTTP error code: %s"%connection.status_code))
+        return True
+
+    @only_for_referential('spree')
+    def product_import(self, cr, uid, ids, context=None):
+        self.import_resources(cr, uid, ids, 'product.product', context=context)
+        self.write(cr, uid, ids, {'last_product_import_date': datetime.now()})
         return True
 
 external_referential()

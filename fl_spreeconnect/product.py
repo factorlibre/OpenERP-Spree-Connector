@@ -32,3 +32,17 @@ class product_template(osv.osv):
         return super(product_template, self)._import_resources(*args, **kwargs)
 
 product_template()
+
+class product_product(osv.osv):
+    _inherit = 'product.product'
+
+    @only_for_referential('spree')
+    def _get_filter(self, cr, uid, external_session, page, previous_filter=None, context=None):
+        params = {}
+        if page:
+            params['page'] = page
+        if external_session.referential_id and external_session.referential_id.last_product_import_date:
+            params['q[updated_at_gt]'] = external_session.referential_id.last_product_import_date
+        return params
+        
+product_product()

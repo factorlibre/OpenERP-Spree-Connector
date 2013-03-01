@@ -52,12 +52,30 @@ def call_spree_method(self, cr, uid, external_session, method_url, method='GET',
     return res.json()
 
 
+@override(osv.osv, 'spree_')
+@only_for_referential('spree')
+def _get_filter(self, cr, uid, external_session, page, previous_filter=None, context=None):
+    """Abstract function that return the filter
+    Can be overwriten in your module
+
+    :param ExternalSession external_session : External_session that contain all params of connection
+    :param int page: Page
+    :param dict previous_filter: the previous filter
+    :rtype: dict
+    :return: dictionary with a filter
+    """
+    params = {}
+    if page:
+        params['page'] = page
+    return params
 
 @override(osv.osv, 'spree_')
 @only_for_referential('spree')
-def _get_external_resources(self, cr, uid, external_session, resource_filter=None, mapping=None, fields=None, page=1, context=None):
+def _get_external_resources(self, cr, uid, external_session, resource_filter=None, mapping=None, fields=None, params=None, context=None):
     search_vals = [('model', '=', self._name), ('referential_id', '=', external_session.referential_id.id)]
     mapping_ids = self.pool.get('external.mapping').search(cr, uid, search_vals)
+    if params is None:
+        params = {}
     if mapping is None:
         mapping = {mapping_ids[0] : self._get_mapping(cr, uid, external_session.referential_id.id, context=context)}
     ext_method = mapping[mapping_ids[0]]['external_get_method']
@@ -65,7 +83,7 @@ def _get_external_resources(self, cr, uid, external_session, resource_filter=Non
     headers = {'content-type': 'aplication/json', 'X-Spree-Token': ext_ref.apipass}
 
     url = ext_method
-    params = {'page': page}
+   
     resource = self.call_spree_method(cr, uid, external_session, url, method='GET', params=params, context=context)
     return resource
 
@@ -86,17 +104,16 @@ def _import_resources(self, cr, uid, external_session, defaults=None, context=No
 
     if mapping[mapping_id].get('mapping_lines', False):
         external_resource_name = mapping[mapping_id]['external_resource_name']
-        step = self._get_import_step(cr, uid, external_session, context=context)
         resource_filter = None
-
         page = 1
-        resource_filter = self._get_filter(cr, uid, external_session, step, previous_filter=resource_filter, context=context)
         #paginated results in spree
-        resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
+        resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
+        resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, params=resource_filter, fields=None, context=context)
         total_pages = resources.get('pages', 1)
-        total_pages = 1
+    
         while page <= total_pages:
-            resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, page=page, context=context)
+            resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
+            resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, params=resource_filter, context=context)
             if resources.get(external_resource_name, False):
                 resources = resources[external_resource_name]
             if not isinstance(resources, list):
