@@ -27,11 +27,13 @@
     'author': 'Factor Libre',
     'maintainer': 'Factor Libre',
     'website': 'http://www.factorlibre.com',
-    'depends': ['base', 'base_sale_multichannels', 'base_external_referentials'],
+    'depends': ['base', 'base_sale_multichannels', 'base_external_referentials', 'product_images_olbs'],
     'init_xml': [],
     'update_xml': [
        'settings/external.referential.type.csv',
-       'settings/1.3.0/external.referential.version.csv'
+       'settings/1.3.0/external.referential.version.csv',
+       'settings/1.3.0/external.mapping.template.csv',
+       'settings/1.3.0/external.mappinglines.template.csv'
     ],
     'installable': True,
     'active': False,
