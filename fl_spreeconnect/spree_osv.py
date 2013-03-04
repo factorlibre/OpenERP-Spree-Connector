@@ -132,12 +132,13 @@ def _import_resources(self, cr, uid, external_session, defaults=None, context=No
         #paginated results in spree
         resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
         resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, params=resource_filter, fields=None, context=context)
-        total_pages = resources.get('pages', 1)
+        
+        total_pages = isinstance(resources, dict) and resources.get('pages', 1) or 1
     
         while page <= total_pages:
             resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
             resources = self._get_external_resources(cr, uid, external_session, mapping=mapping, fields=None, params=resource_filter, context=context)
-            if resources.get(external_resource_name, False):
+            if isinstance(resources,dict) and resources.get(external_resource_name, False):
                 resources = resources[external_resource_name]
             if not isinstance(resources, list):
                 resources = [resources]
