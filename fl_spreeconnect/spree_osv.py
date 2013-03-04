@@ -51,6 +51,29 @@ def call_spree_method(self, cr, uid, external_session, method_url, method='GET',
         return res.json
     return res.json()
 
+@override(osv.osv, 'spree_')
+def _get_expected_oeid(self, cr, uid, external_id, referential_id, context=None):
+    model_data_obj = self.pool.get('ir.model.data')
+    model_data_ids = model_data_obj.search(cr, uid,
+        [('name', '=', self.prefixed_id(external_id)),
+         ('model', '=', self._name),
+         ('referential_id', '=', referential_id)], context=context)
+    model_data_id = model_data_ids and model_data_ids[0] or False
+    expected_oe_id = False
+    if model_data_id:
+        expected_oe_id = model_data_obj.read(cr, uid, model_data_id, ['res_id'])['res_id']
+
+        #Check if expected_oe_id really exists in model
+        if expected_oe_id:
+            domain = []
+            if 'active' in self._columns.keys():
+                domain = ['|', ('active', '=', False), ('active', '=', True)]
+            domain.append(('id','=',expected_oe_id))
+            oe_ids = self.search(cr, uid, domain)
+            if not len(oe_ids):
+                expected_oe_id = False
+
+    return model_data_id, expected_oe_id
 
 @override(osv.osv, 'spree_')
 @only_for_referential('spree')
@@ -154,3 +177,128 @@ def import_resources(self, cr, uid, ids, resource_name, context=None):
         for key in result:
             result[key].append(res.get(key, []))
     return result
+
+@override(osv.osv, 'spree_')
+@only_for_referential('spree')
+def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, resource, vals, sub_mapping_list,
+                           mapping, mapping_id, mapping_line_filter_ids=None, defaults=None, context=None):
+    """
+    Used in _transform_one_external_resource in order to call the sub mapping
+
+    @param sub_mapping_list: list of sub-mapping to apply
+    @param resource: resource encapsulated in the object Resource or a dictionnary
+    @param referential_id: external referential id from where we import the resource
+    @param vals: dictionnary of value previously converted
+    @param defauls: defaults value for the data imported
+    @return: dictionary of converted data in OpenERP format
+    """
+    if not defaults:
+        defaults={}
+    ir_model_field_obj = self.pool.get('ir.model.fields')
+    for sub_mapping in sub_mapping_list:
+        sub_object_name = sub_mapping['child_mapping_id'][1]
+        sub_mapping_id = sub_mapping['child_mapping_id'][0]
+        if convertion_type == 'from_external_to_openerp':
+            from_field = sub_mapping['external_field']
+            if not from_field:
+                from_field = "%s_%s" %(sub_object_name, sub_mapping_id)
+            to_field = sub_mapping['internal_field']
+
+        elif convertion_type == 'from_openerp_to_external':
+            from_field = sub_mapping['internal_field']
+            to_field = sub_mapping['external_field'] or 'hidden_field_to_split_%s'%from_field # if the field doesn't have any name we assume at that we will split it
+
+        field_value = resource[from_field]
+        sub_mapping_obj = self.pool.get(sub_object_name)
+        sub_mapping_defaults = sub_mapping_obj._get_default_import_values(cr, uid, external_session, sub_mapping_id, defaults.get(to_field), context=context)
+
+        if field_value:
+            transform_args = [cr, uid, external_session, convertion_type, field_value]
+            transform_kwargs = {
+                'defaults': sub_mapping_defaults,
+                'mapping': mapping,
+                'mapping_id': sub_mapping_id,
+                'mapping_line_filter_ids': mapping_line_filter_ids,
+                'parent_data': vals,
+                'context': context,
+            }
+
+            #Save submapping as external referential
+            res_sub = sub_mapping_obj._record_external_resources(cr, uid, external_session, field_value,
+                defaults=sub_mapping_defaults, mapping=mapping, mapping_id=sub_mapping_id, context=context)
+
+            if sub_mapping['internal_type'] in ['one2many', 'many2many']:
+                if not isinstance(field_value, list):
+                    transform_args[4] = [field_value]
+                if not to_field in vals:
+                    vals[to_field] = []
+                if convertion_type == 'from_external_to_openerp':
+                    lines = sub_mapping_obj._transform_resources(*transform_args, **transform_kwargs)
+                else:
+                    mapping, sub_mapping_id = self._init_mapping(cr, uid, external_session.referential_id.id, \
+                                                                    convertion_type=convertion_type,
+                                                                    mapping=mapping,
+                                                                    mapping_id=sub_mapping_id,
+                                                                    context=context)
+                    field_to_read = [x['internal_field'] for x in mapping[sub_mapping_id]['mapping_lines']]
+                    sub_resources = sub_mapping_obj.read(cr, uid, field_value, field_to_read, context=context)
+                    transform_args[4] = sub_resources
+                    lines = sub_mapping_obj._transform_resources(*transform_args, **transform_kwargs)
+                for line in lines:
+                    if convertion_type == 'from_external_to_openerp':
+                        if sub_mapping['internal_type'] == 'one2many':
+                            #TODO refactor to search the id and alternative keys before the update
+                            external_id = vals.get('external_id')
+                            alternative_keys = mapping[mapping_id]['alternative_keys']
+                            #search id of the parent
+                            existing_ir_model_data_id, existing_rec_id = \
+                                         self._get_oeid_from_extid_or_alternative_keys(
+                                                                cr, uid, vals, external_id,
+                                                                external_session.referential_id.id,
+                                                                alternative_keys, context=context)
+                            if not existing_rec_id:
+                                existing_rec_id = self.get_oeid(cr, uid, external_id, external_session.referential_id.id)
+                            vals_to_append = (0, 0, line)
+                            if existing_rec_id:
+                                sub_external_id = line.get('external_id')
+                                #Get existing rec_id from id
+                                sub_existing_rec_id = sub_mapping_obj.get_oeid(cr, uid, sub_external_id, external_session.referential_id.id)
+                                
+                                if mapping[sub_mapping_id].get('alternative_keys'):
+                                    sub_alternative_keys = list(mapping[sub_mapping_id]['alternative_keys'])
+                                    if self._columns.get(to_field):
+                                        related_field = self._columns[to_field]._fields_id
+                                    elif self._inherit_fields.get(to_field):
+                                        related_field = self._inherit_fields[to_field][2]._fields_id
+                                    sub_alternative_keys.append(related_field)
+                                    line[related_field] = existing_rec_id
+                                    #search id of the sub_mapping related to the id of the parent
+                                    sub_existing_ir_model_data_id, sub_existing_rec_id = \
+                                                sub_mapping_obj._get_oeid_from_extid_or_alternative_keys(
+                                                                    cr, uid, line, sub_external_id,
+                                                                    external_session.referential_id.id,
+                                                                    sub_alternative_keys, context=context)
+                                    del line[related_field]
+
+                                if 'external_id' in line:
+                                    del line['external_id']
+                                if sub_existing_rec_id:
+                                    vals_to_append = (1, sub_existing_rec_id, line)
+                                
+                        vals[to_field].append(vals_to_append)
+                    else:
+                        vals[to_field].append(line)
+
+            elif sub_mapping['internal_type'] == 'many2one':
+                if convertion_type == 'from_external_to_openerp':
+                    res = sub_mapping_obj._record_one_external_resource(cr, uid, external_session, field_value,
+                                defaults=sub_mapping_defaults, mapping=mapping, mapping_id=sub_mapping_id, context=context)
+                    vals[to_field] = res.get('write_id') or res.get('create_id')
+                else:
+                    sub_resource = sub_mapping_obj.read(cr, uid, field_value[0], context=context)
+                    transform_args[4] = sub_resource
+                    vals[to_field] = sub_mapping_obj._transform_one_resource(*transform_args, **transform_kwargs)
+            else:
+                raise except_osv(_('User Error'),
+                                     _('Error with mapping : %s. Sub mapping can be only apply on one2many, many2one or many2many fields') % (sub_mapping['name'],))
+    return vals
