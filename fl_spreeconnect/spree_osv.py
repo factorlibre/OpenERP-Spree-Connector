@@ -223,6 +223,7 @@ def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, res
                 'context': context,
             }
 
+
             #Save submapping as external referential
             res_sub = sub_mapping_obj._record_external_resources(cr, uid, external_session, field_value,
                 defaults=sub_mapping_defaults, mapping=mapping, mapping_id=sub_mapping_id, context=context)
@@ -283,17 +284,14 @@ def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, res
                                 if 'external_id' in line:
                                     del line['external_id']
                                 if sub_existing_rec_id:
-                                    vals_to_append = (1, sub_existing_rec_id, line)
-                                
+                                    vals_to_append = (4, sub_existing_rec_id)     
                         vals[to_field].append(vals_to_append)
                     else:
                         vals[to_field].append(line)
 
             elif sub_mapping['internal_type'] == 'many2one':
                 if convertion_type == 'from_external_to_openerp':
-                    res = sub_mapping_obj._record_one_external_resource(cr, uid, external_session, field_value,
-                                defaults=sub_mapping_defaults, mapping=mapping, mapping_id=sub_mapping_id, context=context)
-                    vals[to_field] = res.get('write_id') or res.get('create_id')
+                    vals[to_field] = res_sub.get('write_id') or res_sub.get('create_id')
                 else:
                     sub_resource = sub_mapping_obj.read(cr, uid, field_value[0], context=context)
                     transform_args[4] = sub_resource
