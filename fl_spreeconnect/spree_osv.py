@@ -264,7 +264,7 @@ def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, res
                             if existing_rec_id:
                                 sub_external_id = line.get('external_id')
                                 #Get existing rec_id from id
-                                sub_existing_rec_id = sub_mapping_obj.get_oeid(cr, uid, sub_external_id, external_session.referential_id.id)
+                                sub_existing_rec_id = res_sub.get('write_id') or res_sub.get('create_id')
                                 
                                 if mapping[sub_mapping_id].get('alternative_keys'):
                                     sub_alternative_keys = list(mapping[sub_mapping_id]['alternative_keys'])
