@@ -3,7 +3,8 @@
 #
 #    OpenERP, Open Source Management Solution
 #    Copyright (C) 2013 Factor Libre.
-#
+#    Author:
+#        Hugo Santos <hugo.santos@factorlibre.com>
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as
 #    published by the Free Software Foundation, either version 3 of the
@@ -19,22 +20,24 @@
 #
 ##############################################################################
 
-{
-    'name': 'Spree Commerce Connector: Product With Variants',
-    'version': '0.1',
-    'category': 'E-commerce',
-    'description': """Spree Commerce Connector: Product with variants""",
-    'author': 'Factor Libre',
-    'maintainer': 'Factor Libre',
-    'website': 'http://www.factorlibre.com',
-    'depends': ['base', 'product_variant_multi', 'fl_spreeconnect'],
-    'init_xml': [],
-    'update_xml': [
-        'settings/1.3.0/external.mapping.template.csv',
-        'settings/1.3.0/external.mappinglines.template.csv',
-        'external_referential_view.xml'
-    ],
-    'installable': True,
-    'active': False,
-}
-# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:
+from osv import osv, fields
+from base_external_referentials.decorator import only_for_referential, catch_error_in_report, open_report
+
+class product_template(osv.osv):
+    _inherit = 'product.template'
+
+    @only_for_referential('spree')
+    @open_report
+    def _import_resources(self, *args, **kwargs):
+        return super(product_template, self)._import_resources(*args, **kwargs)
+
+    @only_for_referential('spree')
+    def _get_filter(self, cr, uid, external_session, page, previous_filter=None, context=None):
+        params = {}
+        if page:
+            params['page'] = page
+        if external_session.referential_id and external_session.referential_id.last_product_import_date:
+            params['q[updated_at_gt]'] = external_session.referential_id.last_product_import_date
+        return params
+
+product_template()

@@ -1,0 +1,33 @@
+id,mapping_id:id,sequence,type,evaluation_type,field_id:id,external_field,external_type,datetime_format,function_name,in_function,out_function,child_mapping_id:id,alternative_key
+fl_spreeconnect.spree130_product_images_Link,fl_spreeconnect.spree130_product_images,0,in_out,function,,,bool,,Link,"result = [('link',True)]",,,False
+fl_spreeconnect.spree130_product_images_attachment_file_name,fl_spreeconnect.spree130_product_images,0,in_out,direct,product_images_olbs.field_product_images_name,attachment_file_name,unicode,,,,,,False
+fl_spreeconnect.spree130_product_images_Image URL,fl_spreeconnect.spree130_product_images,0,in_out,function,product_images_olbs.field_product_images_url,attachment_url,unicode,,Image URL,"if resource.get('attachment_url'):
+    url = resource.get('attachment_url')
+    if external_session.referential_id.location:
+        url = ""%s%s"" % (external_session.referential_id.location, url)
+result = [('url',url)]",,,False
+spree130_product_images_product_id,fl_spreeconnect.spree130_product_images,0,in_out,function,,viewable_id,unicode,,product_id,"product_id = False
+if resource.get('viewable_id'):
+    product_id = self.pool.get('product.product').get_oeid(cr, uid, resource.get('viewable_id'), external_session.referential_id.id)
+result = [('product_id',product_id)]",,,False
+fl_spreeconnect.spree130_product_category_taxons,fl_spreeconnect.spree130_product_category,0,in_out,sub-mapping,product.field_product_category_child_id,taxons,list,,,,,fl_spreeconnect.spree130_product_category,False
+fl_spreeconnect.spree130_product_category_name,fl_spreeconnect.spree130_product_category,0,in_out,direct,product.field_product_category_name,name,unicode,,,,,,False
+spree130_product_template_price,spree130_product_template,0,in_out,direct,product.field_product_template_list_price,price,unicode,,,,,,False
+spree130_product_template_categ_id,spree130_product_template,0,in_out,function,product.field_product_template_categ_id,,unicode,,categ_id,"value = []
+if resource.get('taxon_ids'):
+    taxon_ids = resource.get('taxon_ids')
+    if taxon_ids[0]:
+        oerp_categ_id = self.pool.get('product.category').get_oeid(cr, uid, taxon_ids[0], external_session.referential_id.id)
+        value = [('categ_id',oerp_categ_id)]
+result = value",,,False
+spree130_product_template_name,spree130_product_template,0,in_out,direct,product.field_product_template_name,name,unicode,,,,,,False
+spree130_product_template_is_multi_variants,spree130_product_template,0,in,function,product_variant_multi.field_product_template_is_multi_variants,,unicode,,is_multi_variants,"multi_variants = False
+if resource.get('variants'):
+    if len(resource.get('variants')) > 1:
+        multi_variants = True
+result = [('is_multi_variants',multi_variants)]",,,False
+spree130_product_template_variants,spree130_product_template,5,in_out,sub-mapping,product_variant_multi.field_product_template_variant_ids,variants,list,,,,,spree130_product_product,False
+spree130_product_product_sku,spree130_product_product,0,in_out,direct,product.field_product_product_default_code,sku,unicode,,,,,,False
+spree130_product_product_weight,spree130_product_product,0,in_out,direct,product.field_product_template_weight,weight,float,,,,,,False
+spree130_product_product_name,spree130_product_product,0,in_out,direct,product_variant_multi.field_product_product_name,name,unicode,,,,,,False
+spree130_product_product_cost_price,spree130_product_product,0,in_out,direct,product.field_product_template_standard_price,cost_price,float,,,,,,False
