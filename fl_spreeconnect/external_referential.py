@@ -55,6 +55,11 @@ class external_referential(osv.osv):
         return True
 
     @only_for_referential('spree')
+    def product_category_import(self, cr, uid, ids, context=None):
+        self.import_resources(cr, uid, ids, 'product.category', context=context)
+        return True
+
+    @only_for_referential('spree')
     def product_import(self, cr, uid, ids, context=None):
         self.import_resources(cr, uid, ids, 'product.product', context=context)
         self.write(cr, uid, ids, {'last_product_import_date': datetime.now()})

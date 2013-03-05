@@ -33,7 +33,8 @@
        'settings/external.referential.type.csv',
        'settings/1.3.0/external.referential.version.csv',
        'settings/1.3.0/external.mapping.template.csv',
-       'settings/1.3.0/external.mappinglines.template.csv'
+       'settings/1.3.0/external.mappinglines.template.csv',
+       'external_referential_view.xml'
     ],
     'installable': True,
     'active': False,

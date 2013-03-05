@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+        <record id="external_referential_spree_form_view" model="ir.ui.view">
+            <field name="name">external.referential.spree.form</field>
+            <field name="model">external.referential</field>
+            <field name="view_type">form</field>
+            <field name="inherit_id" ref="base_external_referentials.external_referential_form_view"/>
+            <field name="arch" type="xml">
+                <button name="import_referentials" position="after">
+                    <button name="product_category_import" type="object"
+                        string="3 - Import Product Categories"/>
+                    <button name="product_import" type="object"
+                        string="4 - Import Products"/>
+                </button>
+            </field>
+        </record>
+    </data>
+</openerp>
