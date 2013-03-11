@@ -1,2 +1,3 @@
 import external_referential
 import product
+import sale

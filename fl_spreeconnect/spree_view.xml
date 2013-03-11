@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+        <menuitem id="spree_connection_root" icon="terp-sale" 
+            name="Spree Connection" sequence="0" parent="base.menu_administration"/>
+        <menuitem id="menu_spree_instances" name="Spree Instances" parent="spree_connection_root"
+            action="action_spree_external_referential" />
+        <menuitem id="menu_spree_core_shops" name="Spree Shops" parent="spree_connection_root"
+            action="act_spree_shop_form" />
+
+    </data>
+</openerp>

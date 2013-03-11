@@ -3,7 +3,8 @@
 #
 #    OpenERP, Open Source Management Solution
 #    Copyright (C) 2013 Factor Libre.
-#
+#    Author:
+#        Hugo Santos <hugo.santos@factorlibre.com>
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as
 #    published by the Free Software Foundation, either version 3 of the
@@ -19,26 +20,15 @@
 #
 ##############################################################################
 
-{
-    'name': 'Spree Commerce Connector',
-    'version': '0.1',
-    'category': 'E-commerce',
-    'description': """Spree Commerce Connector""",
-    'author': 'Factor Libre',
-    'maintainer': 'Factor Libre',
-    'website': 'http://www.factorlibre.com',
-    'depends': ['base', 'base_sale_multichannels', 'base_external_referentials', 'product_images_olbs'],
-    'init_xml': [],
-    'update_xml': [
-       'settings/external.referential.type.csv',
-       'settings/1.3.0/external.referential.version.csv',
-       'settings/1.3.0/external.mapping.template.csv',
-       'settings/1.3.0/external.mappinglines.template.csv',
-       'external_referential_view.xml',
-       'sale_view.xml',
-       'spree_view.xml'
-    ],
-    'installable': True,
-    'active': False,
-}
-# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:
+from osv import osv, fields
+from tools.translate import _
+from base_external_referentials.external_osv import ExternalSession
+
+class sale_shop(osv.osv):
+    _inherit = 'sale.shop'
+
+    def import_inventory(self, cr, uid, ids, context=None):
+        #TODO: To do function to import inventory on single products.
+        return True
+
+sale_shop()
