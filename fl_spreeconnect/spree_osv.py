@@ -102,11 +102,8 @@ def _get_external_resources(self, cr, uid, external_session, resource_filter=Non
     if mapping is None:
         mapping = {mapping_ids[0] : self._get_mapping(cr, uid, external_session.referential_id.id, context=context)}
     ext_method = mapping[mapping_ids[0]]['external_get_method']
-    ext_ref = external_session.referential_id
-    headers = {'content-type': 'aplication/json', 'X-Spree-Token': ext_ref.apipass}
-
+    
     url = ext_method
-   
     resource = self.call_spree_method(cr, uid, external_session, url, method='GET', params=params, context=context)
     return resource
 
