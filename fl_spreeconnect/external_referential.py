@@ -26,6 +26,7 @@ from openerp.tools.config import config
 
 from base_external_referentials.decorator import only_for_referential
 from base_external_referentials.external_referentials import REF_VISIBLE_FIELDS
+from base_external_referentials.external_osv import ExternalSession
 
 import requests
 from datetime import datetime
@@ -64,5 +65,85 @@ class external_referential(osv.osv):
         self.import_resources(cr, uid, ids, 'product.product', context=context)
         self.write(cr, uid, ids, {'last_product_import_date': datetime.now()})
         return True
+
+    def _compare_countries(self, cr, uid, ps_field, oe_field, ps_dict, oe_dict, context=None):
+        if oe_dict[oe_field] == ps_dict[ps_field]:
+            return True
+        return False
+
+    def _compare_taxes(self, cr, uid, ps_field, oe_field, ps_dict, oe_dict, context=None):
+        if oe_dict['type_tax_use'] == 'sale'\
+                    and abs(oe_dict[oe_field]*100 - float(ps_dict[0][ps_field]))<0.01:
+            return True
+        else:
+            return False
+
+    def _bidirectional_synchro(self, cr, uid, external_session, obj_readable_name, oe_obj, ps_field, ps_readable_field, oe_field, oe_readable_field, compare_function, context=None):
+        external_session.logger.info(_("[%s] Starting synchro between OERP and PS") %obj_readable_name)
+        referential_id = external_session.referential_id.id
+        nr_ps_already_mapped = 0
+        nr_ps_mapped = 0
+        nr_ps_not_mapped = 0
+        # Get all OERP obj
+        oe_ids = oe_obj.search(cr, uid, [], context=context)
+        fields_to_read = [oe_field]
+        if not oe_readable_field == oe_field:
+            fields_to_read.append(oe_readable_field)
+        oe_list_dict = oe_obj.read(cr, uid, oe_ids, fields_to_read, context=context)
+        #print "oe_list_dict=", oe_list_dict
+        
+        for spree_dict in oe_obj._get_external_resources(cr, uid, external_session, context=context):
+            # Check if the PS ID is already mapped to an OE ID
+            sp_id = spree_dict.get('id')
+            oe_id = oe_obj.extid_to_existing_oeid(cr, uid, external_id=sp_id, referential_id=referential_id, context=context)
+            #print "oe_c_id=", oe_id
+            if oe_id:
+                # Do nothing for the PS IDs that are already mapped
+                external_session.logger.debug(_("[%s] Spree ID %s is already mapped to OERP ID %s") %(obj_readable_name, sp_id, oe_id))
+                nr_ps_already_mapped += 1
+            else:
+                mapping_found = False
+                # Loop on OE IDs
+                for oe_dict in oe_list_dict:
+                    # Search for a match
+                    if compare_function(cr, uid, ps_field, oe_field, spree_dict, oe_dict, context=context):
+                        # it matches, so I write the external ID
+                        oe_obj.create_external_id_vals(cr, uid, existing_rec_id=oe_dict['id'], external_id=sp_id, referential_id=referential_id, context=context)
+                        external_session.logger.info(
+                            _("[%s] Mapping Spree '%s' (%s) to OERP '%s' (%s)")
+                            % (obj_readable_name, spree_dict[0][ps_readable_field], spree_dict[0][ps_field], oe_dict[oe_readable_field], oe_dict[oe_field]))
+                        nr_ps_mapped += 1
+                        mapping_found = True
+                        break
+                if not mapping_found:
+                    # if it doesn't match, I just print a warning
+                    external_session.logger.warning(
+                        _("[%s] PS '%s' (%s) was not mapped to any OERP entry")
+                        % (obj_readable_name, spree_dict[0][ps_readable_field], spree_dict[0][ps_field]))
+                    nr_ps_not_mapped += 1
+        external_session.logger.info(
+            _("[%s] Synchro between OERP and PS successfull") %obj_readable_name)
+        external_session.logger.info(_("[%s] Number of PS entries already mapped = %s")
+            % (obj_readable_name, nr_ps_already_mapped))
+        external_session.logger.info(_("[%s] Number of PS entries mapped = %s")
+            % (obj_readable_name, nr_ps_mapped))
+        external_session.logger.info(_("[%s] Number of PS entries not mapped = %s")
+            % (obj_readable_name, nr_ps_not_mapped))
+        return True
+
+    @only_for_referential('spree')
+    def import_base_objects(self, cr, uid, ids, context=None):
+        cur_referential = self.browse(cr, uid, ids[0], context=context)
+        external_session = ExternalSession(cur_referential, '')
+
+        self._bidirectional_synchro(cr, uid, external_session, obj_readable_name='TAXES',
+            oe_obj=self.pool.get('res.country'),
+            ps_field='rate', ps_readable_field='name',
+            oe_field='amount',
+            oe_readable_field='type_tax_use',
+            compare_function=self._compare_countries, context=context)
+
+        return True
+
 
 external_referential()
