@@ -138,8 +138,6 @@ class sale_order(Model):
                     partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
                         mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
                 
-                order_resource['order_line'] = []
-                print external_session
                 res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
                 for key in result:
                     result[key].append(res.get(key, []))
@@ -162,6 +160,33 @@ class sale_order(Model):
         # update vals with order onchange in order to compute taxes
         vals = self.play_sale_order_onchange(cr, uid, vals, defaults=defaults, context=context)
         return super(sale_order, self)._merge_with_default_values(cr, uid, external_session, ressource, vals, sub_mapping_list, defaults=defaults, context=context)
-                
 
 sale_order()
+
+class sale_order_line(Model):
+    _inherit = 'sale.order.line'
+
+    def play_sale_order_line_onchange(self, cr, uid, line, parent_data, previous_lines, defaults=None, context=None):
+        #TODO
+        # if context is None:
+        #     context = {}
+        # if defaults is None:
+        #     defaults = {}
+        # original_line = line.copy()
+        # if not context.get('use_external_tax') and 'tax_id' in line:
+        #     del line['tax_id']
+        # print line
+        # line = self.call_onchange(cr, uid, 'product_id_change', line, defaults=defaults, parent_data=parent_data, previous_lines=previous_lines, context=context)
+        # #TODO all m2m should be mapped correctly
+        # if context.get('use_external_tax'):
+        #     #if we use the external tax and the onchange have added a taxe, 
+        #     #them we remove it.
+        #     #Indeed we have to make the difference between a real tax_id
+        #     #imported and a default value set by the onchange
+        #     if not 'tax_id' in original_line and 'tax_id' in line:
+        #         del line['tax_id']
+        # elif line and line.get('tax_id'):
+        #     line['tax_id'] = [(6, 0, line['tax_id'])]
+        return line
+
+sale_order_line()
