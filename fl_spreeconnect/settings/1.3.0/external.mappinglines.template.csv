@@ -1,25 +1,25 @@
 "id","mapping_id:id","sequence","type","evaluation_type","field_id:id","external_field","external_type","datetime_format","function_name","in_function","out_function","child_mapping_id:id","alternative_key"
-"spree130_product_product_cost_price","spree130_product_product",0,"in_out","function",,,"float",,"cost_price","cost_price  = 0.0
-if resource.get('variants'):
-    variant = resource.get('variants')[0]
-    cost_price = float(variant['cost_price'])
-result = [('standard_price','=',cost_price)]",,,"False"
-"spree130_product_product_default_code","spree130_product_product",0,"in_out","function",,,"unicode",,"default_code","default_code = '-'
-if resource.get('variants'):
-    variant = resource.get('variants')[0]
-    default_code = variant['sku']
-result = [('default_code',default_code)]",,,"False"
-"spree130_product_product_images","spree130_product_product",0,"in_out","sub-mapping","product_images_olbs.field_product_product_image_ids","images","list",,,,,"spree130_product_images","False"
-"spree130_product_product_name","spree130_product_product",0,"in_out","direct","product.field_product_template_name","name","unicode",,,,,,"False"
-"spree130_product_product_description","spree130_product_product",0,"in_out","direct","product.field_product_template_description","description","unicode",,,,,,"False"
-"spree130_product_product_Product Category","spree130_product_product",0,"in_out","function",,,"unicode",,"Product Category","value = []
+"spree130_product_category_name","spree130_product_category",0,"in_out","direct","product.field_product_category_name","name","unicode",,,,,,"False"
+"spree130_product_category_taxons","spree130_product_category",0,"in_out","sub-mapping","product.field_product_category_child_id","taxons","list",,,,,"spree130_product_category","False"
+"spree130_product_template_price","spree130_product_template",0,"in_out","direct","product.field_product_template_list_price","price","unicode",,,,,,"False"
+"spree130_product_template_categ_id","spree130_product_template",0,"in_out","function","product.field_product_template_categ_id",,"unicode",,"categ_id","value = []
 if resource.get('taxon_ids'):
     taxon_ids = resource.get('taxon_ids')
     if taxon_ids[0]:
         oerp_categ_id = self.pool.get('product.category').get_oeid(cr, uid, taxon_ids[0], external_session.referential_id.id)
         value = [('categ_id',oerp_categ_id)]
 result = value",,,"False"
-"spree130_product_product_price","spree130_product_product",1,"in_out","direct","product.field_product_template_list_price","price","float",,,,,,"False"
+"spree130_product_template_name","spree130_product_template",0,"in_out","direct","product.field_product_template_name","name","unicode",,,,,,"False"
+"spree130_product_template_is_multi_variants","spree130_product_template",0,"in","function","product_variant_multi.field_product_template_is_multi_variants",,"unicode",,"is_multi_variants","multi_variants = False
+if resource.get('variants'):
+    if len(resource.get('variants')) > 1:
+        multi_variants = True
+result = [('is_multi_variants',multi_variants)]",,,"False"
+"spree130_product_template_variants","spree130_product_template",5,"in_out","sub-mapping","product_variant_multi.field_product_template_variant_ids","variants","list",,,,,"spree130_product_product","False"
+"spree130_product_product_sku","spree130_product_product",0,"in_out","direct","product.field_product_product_default_code","sku","unicode",,,,,,"False"
+"spree130_product_product_weight","spree130_product_product",0,"in_out","direct","product.field_product_template_weight","weight","float",,,,,,"False"
+"spree130_product_product_name","spree130_product_product",0,"in_out","direct","product_variant_multi.field_product_product_name","name","unicode",,,,,,"False"
+"spree130_product_product_cost_price","spree130_product_product",0,"in_out","direct","product.field_product_template_standard_price","cost_price","float",,,,,,"False"
 "spree130_product_images_Link","spree130_product_images",0,"in_out","function",,,"bool",,"Link","result = [('link',True)]",,,"False"
 "spree130_product_images_attachment_file_name","spree130_product_images",0,"in_out","direct","product_images_olbs.field_product_images_name","attachment_file_name","unicode",,,,,,"False"
 "spree130_product_images_Image URL","spree130_product_images",0,"in_out","function","product_images_olbs.field_product_images_url","attachment_url","unicode",,"Image URL","if resource.get('attachment_url'):
@@ -27,13 +27,18 @@ result = value",,,"False"
     if external_session.referential_id.location:
         url = ""%s%s"" % (external_session.referential_id.location, url)
 result = [('url',url)]",,,"False"
-"spree130_product_category_name","spree130_product_category",0,"in_out","direct","product.field_product_category_name","name","unicode",,,,,,"False"
-"spree130_product_category_taxons","spree130_product_category",0,"in_out","sub-mapping","product.field_product_category_child_id","taxons","list",,,,,"spree130_product_category","False"
-"spree130_sale_order_ship_address","spree130_sale_order",0,"in_out","sub-mapping","sale.field_sale_order_partner_shipping_id","ship_address","dict",,,,,"spree130_res_partner_address","False"
-"spree130_sale_order_number","spree130_sale_order",0,"in_out","direct","sale.field_sale_order_name","number","unicode",,,,,,"True"
-"spree130_sale_order_partner_id","spree130_sale_order",0,"in_out","direct","sale.field_sale_order_partner_id","partner_id","int",,,,,,"False"
-"spree130_sale_order_completed_at","spree130_sale_order",0,"in_out","direct","sale.field_sale_order_date_order","completed_at","datetime","%Y-%m-%d %H:%M:%S",,,,,"False"
-"spree130_sale_order_bill_address","spree130_sale_order",0,"in_out","sub-mapping","sale.field_sale_order_partner_invoice_id","bill_address","dict",,,,,"spree130_res_partner_address","False"
+"spree130_product_images_product_id","spree130_product_images",0,"in_out","function",,"viewable_id","unicode",,"product_id","product_id = False
+if resource.get('viewable_id'):
+    product_id = self.pool.get('product.product').get_oeid(cr, uid, resource.get('viewable_id'), external_session.referential_id.id)
+result = [('product_id',product_id)]",,,"False"
+"spree130_res_partner_email","spree130_res_partner",0,"in","direct","base.field_res_partner_name","email","unicode",,,,,,"False"
+"spree130_res_partner_address_type","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_type","type","unicode",,,,,,"False"
+"spree130_res_partner_address_address1","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_street","address1","unicode",,,,,,"False"
+"spree130_res_partner_address_address2","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_street2","address2","unicode",,,,,,"False"
+"spree130_res_partner_address_city","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_city","city","unicode",,,,,,"False"
+"spree130_res_partner_address_zipcode","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_zip","zipcode","unicode",,,,,,"False"
+"spree130_res_partner_address_phone","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_phone","phone","unicode",,,,,,"False"
+"spree130_res_partner_address_partner_id","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_partner_id","partner_id","int",,,,,,"False"
 "spree130_res_partner_address_Name","spree130_res_partner_address",0,"in_out","function",,,"unicode",,"Name","name = """"
 if resource.get('firstname'):
     name = resource.get('firstname')
@@ -41,8 +46,16 @@ if resource.get('lastname'):
     name = ""%s %s"" % (name, resource.get('lastname'))
 
 result = [('name',name)]",,,"False"
-"spree130_res_partner_address_address1","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_street","address1","unicode",,,,,,"False"
-"spree130_res_partner_address_address2","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_street2","address2","unicode",,,,,,"False"
-"spree130_res_partner_address_city","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_city","city","unicode",,,,,,"False"
-"spree130_res_partner_address_zipcode","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_zip","zipcode","unicode",,,,,,"False"
-"spree130_res_partner_address_phone","spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_phone","phone","unicode",,,,,,"False"
+"spree130_sale_order_shipping_amount_tax_included","spree130_sale_order",0,"in","function",,,"unicode",,"shipping_amount_tax_included","shipping_amount = 0.0
+if resource.get('shipments', []):
+    shipping_amount = sum(map(lambda s: float(s['cost']), resource['shipments']))
+result = [('shipping_amount_tax_included',shipping_amount)]",,,"False"
+"spree130_sale_order_ship_address","spree130_sale_order",0,"in","direct","sale.field_sale_order_partner_shipping_id","ship_address_id","int",,,,,,"False"
+"spree130_sale_order_bill_address","spree130_sale_order",0,"in","direct","sale.field_sale_order_partner_invoice_id","bill_address_id","int",,,,,,"False"
+"spree130_sale_order_number","spree130_sale_order",0,"in","direct","sale.field_sale_order_name","number","unicode",,,,,,"True"
+"spree130_sale_order_partner_id","spree130_sale_order",0,"in","direct","sale.field_sale_order_partner_id","partner_id","int",,,,,,"False"
+"spree130_sale_order_completed_at","spree130_sale_order",0,"in","direct","sale.field_sale_order_date_order","completed_at","datetime","%Y-%m-%dT%H:%M:%SZ",,,,,"False"
+"spree130_sale_order_line_order_id","spree130_sale_order_line",0,"in","direct","sale.field_sale_order_line_order_id","order_id","int",,,,,,"False"
+"spree130_sale_order_line_variant_id","spree130_sale_order_line",0,"in_out","direct","sale.field_sale_order_line_product_id","variant_id","int",,,,,,"False"
+"spree130_sale_order_line_quantity","spree130_sale_order_line",0,"in_out","direct","sale.field_sale_order_line_product_uom_qty","quantity","float",,,,,,"False"
+"spree130_sale_order_line_price","spree130_sale_order_line",0,"in","direct","sale.field_sale_order_line_price_unit","price","float",,,,,,"False"

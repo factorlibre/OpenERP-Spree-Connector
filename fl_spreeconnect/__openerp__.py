@@ -27,7 +27,7 @@
     'author': 'Factor Libre',
     'maintainer': 'Factor Libre',
     'website': 'http://www.factorlibre.com',
-    'depends': ['base', 'base_sale_multichannels', 'base_external_referentials', 'product_images_olbs'],
+    'depends': ['base', 'base_sale_multichannels', 'base_external_referentials', 'product_images_olbs', 'product_variant_multi'],
     'init_xml': [],
     'update_xml': [
        'settings/external.referential.type.csv',

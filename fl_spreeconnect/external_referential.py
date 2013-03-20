@@ -62,8 +62,13 @@ class external_referential(osv.osv):
 
     @only_for_referential('spree')
     def product_import(self, cr, uid, ids, context=None):
-        self.import_resources(cr, uid, ids, 'product.product', context=context)
+        self.import_resources(cr, uid, ids, 'product.template', context=context)
         self.write(cr, uid, ids, {'last_product_import_date': datetime.now()})
+        return True
+
+    @only_for_referential('spree')
+    def image_import(self, cr, uid, ids, context=None):
+        self.import_resources(cr, uid, ids, 'product.images', context=context)
         return True
 
     def _compare_countries(self, cr, uid, ps_field, oe_field, ps_dict, oe_dict, context=None):

@@ -12,6 +12,8 @@
                         string="3 - Import Product Categories"/>
                     <button name="product_import" type="object"
                         string="4 - Import Products"/>
+                    <button name="image_import" type="object"
+                        string="5 - Import Product Images"/>
                 </button>
             </field>
         </record>
