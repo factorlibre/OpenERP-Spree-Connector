@@ -24,13 +24,10 @@
                                 <button name="import_inventory" 
                                     string="Import Stock Levels" colspan="1" type="object"/>
                         </group>
-                        <!-- <group col="3" colspan="3">
+                       <group col="3" colspan="3">
                             <separator string="Orders" colspan="3"/>
                             <button name="import_orders" string="Import Orders" type="object"/>
-                            <field name="import_orders_from_date"/>
-                            <button name="update_orders" string="Update Orders State on Channel" type="object"/>
-                            <field name="last_update_order_export_date"/>
-                        </group> -->
+                        </group>
                     </group>
                 </page>
             </page>
