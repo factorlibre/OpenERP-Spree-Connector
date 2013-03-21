@@ -7,3 +7,5 @@
 "spree130_res_partner_address","spree130","base.model_res_partner_address",,"address","id",,,,,,,
 "spree130_res_partner","spree130","account.model_res_partner",,,"user_id",,,,,,,
 "spree130_sale_order_line","spree130","base_sale_multichannels.model_sale_order_line",,"line_items","id",,,,,,,
+"spree130_account_tax","spree130","account.model_account_tax",,,"id",,,"tax_rates",,,,
+"spree130_res_country","spree130","base.model_res_country",,"countries","id",,,"countries",,,,

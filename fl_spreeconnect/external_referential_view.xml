@@ -7,7 +7,9 @@
             <field name="view_type">form</field>
             <field name="inherit_id" ref="base_external_referentials.external_referential_form_view"/>
             <field name="arch" type="xml">
-                <button name="import_referentials" position="after">
+                <button name="import_referentials" position="replace">
+                    <button name="import_base_objects" type="object"
+                        string="2 - Import Base Objects" colspan="2"/>
                     <button name="product_category_import" type="object"
                         string="3 - Import Product Categories"/>
                     <button name="product_import" type="object"
