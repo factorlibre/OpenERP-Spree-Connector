@@ -231,10 +231,10 @@ class sale_order(Model):
                     partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
                         mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
                 
-                if context.get('is_tax_included', False):
-                    defaults['price_type'] = 'tax_included'
-                else:
-                    defaults['price_type'] = 'tax_excluded'
+                # if context.get('is_tax_included', False):
+                #     defaults['price_type'] = 'tax_included'
+                # else:
+                #     defaults['price_type'] = 'tax_excluded'
                     
                 res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
                 for key in result:
