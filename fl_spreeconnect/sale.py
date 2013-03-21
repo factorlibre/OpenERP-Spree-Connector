@@ -157,12 +157,12 @@ class sale_order(Model):
                         'product_uom_qty': 1,
                         'price_unit': price_unit,
                     }
-        print extra_line
 
         extra_line = self.pool.get('sale.order.line').play_sale_order_line_onchange(cr, uid, extra_line, vals, vals['order_line'], context=context)
         if context.get('use_external_tax') and option.get('tax_rate_field'):
-            tax_rate = vals.pop(option['tax_rate_field'])
+            tax_rate = vals.get(option['tax_rate_field'])
             if tax_rate:
+                del vals[option['tax_rate_field']]
                 line_tax_id = self.pool.get('account.tax').get_tax_from_rate(cr, uid, tax_rate, context.get('is_tax_included'), context=context)
                 if not line_tax_id:
                     raise except_osv(_('Error'), _('No tax id found for the rate %s with the tax include = %s')%(tax_rate, context.get('is_tax_included')))
@@ -215,30 +215,37 @@ class sale_order(Model):
                     partner_data = {'email': order_resource.get('email'), 'user_id': order_resource.get('user_id')}
                     partner_res = partner_pool._record_external_resources(cr, uid, external_session, [partner_data], 
                         mapping=partner_mapping, mapping_id=partner_mapping_id, context=context)
-                    order_resource['partner_id'] = order_resource.get('user_id')
 
                 #Set partner_id and type in bill_address and ship_address
                 if order_resource.get('bill_address'):
-                    order_resource['bill_address']['partner_id'] = order_resource['partner_id']
+                    order_resource['bill_address']['partner_id'] = order_resource['user_id']
                     order_resource['bill_address']['type'] = 'invoice'
                     order_resource['bill_address_id'] = order_resource['bill_address']['id']
                     partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['bill_address']],
                         mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
 
                 if order_resource.get('ship_address'):
-                    order_resource['ship_address']['partner_id'] = order_resource['partner_id']
+                    order_resource['ship_address']['partner_id'] = order_resource['user_id']
                     order_resource['ship_address']['type'] = 'delivery'
                     order_resource['ship_address_id'] = order_resource['ship_address']['id']
                     partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
                         mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
                 
+                if context.get('is_tax_included', False):
+                    defaults['price_type'] = 'tax_included'
+                else:
+                    defaults['price_type'] = 'tax_excluded'
+                    
                 res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
                 for key in result:
                     result[key].append(res.get(key, []))
 
+                #Change partner_id to real partner_id
+                order_resource['partner_id'] = partner_pool.extid_to_existing_oeid(cr, uid, external_id=order_resource['user_id'], referential_id=external_session.referential_id.id, context=context)
+               
                 for line in order_resource.get('line_items'):
                     line['order_id'] = order_resource['id']
-                    ctx = context.copy()
+                    ctx = context.copy()                    
                     ctx['parent_data'] = order_resource
                     sale_line_pool._record_external_resources(cr, uid, external_session, [line],
                         mapping=sale_line_mapping, mapping_id=sale_line_mapping_id, context=ctx)
@@ -269,27 +276,60 @@ class sale_order_line(Model):
 
     def play_sale_order_line_onchange(self, cr, uid, line, parent_data, previous_lines, defaults=None, context=None):
         #TODO
+        account_tax = self.pool.get('account.tax')
         if context is None:
             context = {}
         if defaults is None:
             defaults = {}
         original_line = line.copy()
-        # if not context.get('use_external_tax') and 'tax_id' in line:
-        #     del line['tax_id']
+        if not context.get('use_external_tax') and 'tax_id' in line:
+            del line['tax_id']
         if parent_data is None:
             parent_data = context.get('parent_data', {})
 
         line = self.call_onchange(cr, uid, 'product_id_change', line, defaults=defaults, parent_data=parent_data or {}, previous_lines=previous_lines or {}, context=context)
-        # #TODO all m2m should be mapped correctly
-        # if context.get('use_external_tax'):
-        #     #if we use the external tax and the onchange have added a taxe, 
-        #     #them we remove it.
-        #     #Indeed we have to make the difference between a real tax_id
-        #     #imported and a default value set by the onchange
-        #     if not 'tax_id' in original_line and 'tax_id' in line:
-        #         del line['tax_id']
-        # elif line and line.get('tax_id'):
-        #     line['tax_id'] = [(6, 0, line['tax_id'])]
+        #TODO all m2m should be mapped correctly
+        if context.get('use_external_tax'):
+            #if we use the external tax and the onchange have added a taxe, 
+            #them we remove it.
+            #Indeed we have to make the difference between a real tax_id
+            #imported and a default value set by the onchange
+            if 'tax_id' in line:
+                del line['tax_id']
+        elif line and line.get('tax_id'):
+            line['tax_id'] = [(6, 0, line['tax_id'])]
+        return line
+
+    def _transform_one_resource(self, cr, uid, external_session, convertion_type, resource, mapping, mapping_id,
+                     mapping_line_filter_ids=None, parent_data=None, previous_result=None, defaults=None, context=None):
+        
+        account_tax = self.pool.get('account.tax')
+        if context is None: context={}
+
+        line = super(sale_order_line, self)._transform_one_resource(cr, uid, external_session, convertion_type, resource,
+                            mapping, mapping_id, mapping_line_filter_ids=mapping_line_filter_ids, parent_data=parent_data,
+                            previous_result=previous_result, defaults=defaults, context=context)
+
+        if context.get('is_tax_included') and 'price_unit_tax_included' in line:
+            line['price_unit'] = line['price_unit_tax_included']
+        elif 'price_unit_tax_excluded' in line:
+            line['price_unit']  = line['price_unit_tax_excluded']
+
+        line = self.play_sale_order_line_onchange(cr, uid, line, parent_data, previous_result,
+                                                                        defaults, context=context)
+        if context.get('use_external_tax'):
+            #get adjustment from resource
+            erp_tax_id = False
+            if resource.get('adjustments'):
+                for adj in resource.get('adjustments'):
+                    adjustment = adj['adjustment']
+                    if adjustment['originator_type'] == 'Spree::TaxRate':
+                        erp_tax_id = account_tax.get_oeid(cr, uid, adjustment['originator_id'], 
+                            external_session.referential_id.id, context=context)
+            if erp_tax_id:
+                line['tax_id'] = [(6, 0, [erp_tax_id])]
+            else:
+                line['tax_id'] = False
         return line
 
 sale_order_line()
