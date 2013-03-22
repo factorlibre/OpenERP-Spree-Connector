@@ -174,6 +174,7 @@ class external_referential(osv.osv):
             oe_readable_field='name',
             compare_function=self._compare_countries, context=context)
 
+        self.import_resources(cr, uid, ids, 'payment.method', context=context)
 
         return True
 
