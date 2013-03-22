@@ -223,8 +223,10 @@ def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, res
 
 
             #Save submapping as external referential
-            res_sub = sub_mapping_obj._record_external_resources(cr, uid, external_session, field_value,
-                defaults=sub_mapping_defaults, mapping=mapping, mapping_id=sub_mapping_id, context=context)
+            #TODO: FIX _Record sale.order.line
+            if sub_mapping_obj._name != 'sale.order.line':
+                res_sub = sub_mapping_obj._record_external_resources(cr, uid, external_session, field_value,
+                    defaults=sub_mapping_defaults, mapping=mapping, mapping_id=sub_mapping_id, context=context)
 
             if sub_mapping['internal_type'] in ['one2many', 'many2many']:
                 if not isinstance(field_value, list):
@@ -243,6 +245,7 @@ def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, res
                     sub_resources = sub_mapping_obj.read(cr, uid, field_value, field_to_read, context=context)
                     transform_args[4] = sub_resources
                     lines = sub_mapping_obj._transform_resources(*transform_args, **transform_kwargs)
+                print "TRANSFORM ONE2MANY %s" % lines
                 for line in lines:
                     if convertion_type == 'from_external_to_openerp':
                         if sub_mapping['internal_type'] == 'one2many':
