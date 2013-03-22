@@ -25,6 +25,7 @@ from openerp.osv.orm import Model
 from tools.translate import _
 from base_external_referentials.external_osv import ExternalSession, override
 from base_external_referentials.decorator import only_for_referential
+import netsvc
 
 class sale_shop(Model):
     _inherit = 'sale.shop'
@@ -178,6 +179,9 @@ class sale_order(Model):
         return vals
 
     def _import_resources(self, cr, uid, external_session, defaults=None, context=None):
+        if context is None: context = {}
+        if defaults is None: defaults = {}
+
         partner_pool = self.pool.get('res.partner')
         partner_address_pool = self.pool.get('res.partner.address')
         sale_line_pool = self.pool.get('sale.order.line')
@@ -230,25 +234,11 @@ class sale_order(Model):
                     order_resource['ship_address_id'] = order_resource['ship_address']['id']
                     partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
                         mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
-                
-                # if context.get('is_tax_included', False):
-                #     defaults['price_type'] = 'tax_included'
-                # else:
-                #     defaults['price_type'] = 'tax_excluded'
-                    
+
                 res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
                 for key in result:
                     result[key].append(res.get(key, []))
 
-                #Change partner_id to real partner_id
-                order_resource['partner_id'] = partner_pool.extid_to_existing_oeid(cr, uid, external_id=order_resource['user_id'], referential_id=external_session.referential_id.id, context=context)
-               
-                for line in order_resource.get('line_items'):
-                    line['order_id'] = order_resource['id']
-                    ctx = context.copy()                    
-                    ctx['parent_data'] = order_resource
-                    sale_line_pool._record_external_resources(cr, uid, external_session, [line],
-                        mapping=sale_line_mapping, mapping_id=sale_line_mapping_id, context=ctx)
         return result
 
     
@@ -275,7 +265,6 @@ class sale_order_line(Model):
     _inherit = 'sale.order.line'
 
     def play_sale_order_line_onchange(self, cr, uid, line, parent_data, previous_lines, defaults=None, context=None):
-        #TODO
         account_tax = self.pool.get('account.tax')
         if context is None:
             context = {}
@@ -302,7 +291,7 @@ class sale_order_line(Model):
 
     def _transform_one_resource(self, cr, uid, external_session, convertion_type, resource, mapping, mapping_id,
                      mapping_line_filter_ids=None, parent_data=None, previous_result=None, defaults=None, context=None):
-        
+
         account_tax = self.pool.get('account.tax')
         if context is None: context={}
 
