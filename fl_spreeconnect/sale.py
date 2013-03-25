@@ -77,6 +77,26 @@ class sale_shop(Model):
                 products = self.call_spree_method(cr, uid, external_session, 'products', params={'page': page})
             return True
 
+    def export_inventory(self, cr, uid, ids, context=None):
+        if context is None:
+            context = {}
+        product_pool = self.pool.get('product.product')
+        product_template_pool = self.pool.get('product.template')
+
+        for shop in self.browse(cr, uid, ids, context=context):
+            
+
+            if not shop.referential_id:
+                raise osv.except_osv(_('Error!'),_('You have to define an external referential in the shop in order to import the inventory'))
+
+            #Update all Inventories
+            context['warehouse'] = shop.warehouse_id.id
+            product_ids = product_pool.search(cr, uid, [], context=context)
+            external_session = ExternalSession(shop.referential_id)
+            product_pool.update_spree_stock(cr, uid, product_ids, external_session, context=context)
+        return True
+
+                
     def import_orders(self, cr, uid, ids, context=None):
         self.import_resources(cr, uid, ids, 'sale.order', context=context)
         return True

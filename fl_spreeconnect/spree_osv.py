@@ -46,7 +46,12 @@ def call_spree_method(self, cr, uid, external_session, method_url, method='GET',
 
     res = requests.request(method, url, headers=headers, params=params)
     if res.status_code != requests.codes.ok:
-        raise osv.except_osv(_('Error'), _('Spree HTTP Response error. URL: %s Code: %s' % (url, res.status_code)))
+        _logger.warning('Spree HTTP Response error. URL: %s Code: %s' % (url, res.status_code))
+        #raise osv.except_osv(_('Error'), _('Spree HTTP Response error. URL: %s Code: %s' % (url, res.status_code)))
+        return False
+    if not res.text:
+        _logger.info('Spree HTTP Requests OK. URL: %s Code: %s Params: %s' % (url, res.status_code, params))
+        return True
     if isinstance(res.json, list) or isinstance(res.json, dict):
         return res.json
     return res.json()

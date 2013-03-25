@@ -23,6 +23,8 @@
                             <separator string="Catalog" colspan="3"/>
                                 <button name="import_inventory" 
                                     string="Import Stock Levels" colspan="1" type="object"/>
+                                <button name="export_inventory"
+                                    string="Export Stock Levels" colspan="1" type="object"/>
                         </group>
                        <group col="3" colspan="3">
                             <separator string="Orders" colspan="3"/>

@@ -44,5 +44,19 @@ class product_product(osv.osv):
         if external_session.referential_id and external_session.referential_id.last_product_import_date:
             params['q[updated_at_gt]'] = external_session.referential_id.last_product_import_date
         return params
+
+    def update_spree_stock(self, cr, uid, ids, external_session, context=None):
+        if context is None:
+            context = {}
+        template_pool = self.pool.get('product.template')
+        for prod in self.browse(cr, uid, ids, context=context):
+            ext_template_id = template_pool.get_extid(cr, uid,  prod.product_tmpl_id and prod.product_tmpl_id.id, external_session.referential_id.id, context=context)
+            ext_product_id = self.get_extid(cr, uid, prod.id, external_session.referential_id.id, context=context)
+            if not ext_template_id or not ext_product_id:
+                continue
+            update_product_url = "products/%s/variants/%s" % (ext_template_id, ext_product_id)
+            params = {'variant[on_hand]': prod.qty_available}
+            self.call_spree_method(cr, uid, external_session, update_product_url, method="PUT", params=params)
+        return True
         
 product_product()
