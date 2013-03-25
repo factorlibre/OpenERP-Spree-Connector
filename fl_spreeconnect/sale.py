@@ -171,7 +171,7 @@ class sale_order(Model):
                 extra_line['tax_id'] = [(6, 0, [line_tax_id])]
             else:
                 extra_line['tax_id'] = False
-        if not option.get('tax_rate_field'):
+        if not option.get('tax_rate_field') and extra_line.get('tax_id'):
             del extra_line['tax_id']
         ext_code_field = option.get('code_field')
         if ext_code_field and vals.get(ext_code_field):
