@@ -245,7 +245,6 @@ def _transform_sub_mapping(self, cr, uid, external_session, convertion_type, res
                     sub_resources = sub_mapping_obj.read(cr, uid, field_value, field_to_read, context=context)
                     transform_args[4] = sub_resources
                     lines = sub_mapping_obj._transform_resources(*transform_args, **transform_kwargs)
-                print "TRANSFORM ONE2MANY %s" % lines
                 for line in lines:
                     if convertion_type == 'from_external_to_openerp':
                         if sub_mapping['internal_type'] == 'one2many':

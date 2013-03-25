@@ -126,6 +126,7 @@ class sale_order(Model):
         vals['order_line'] = vals.get('order_line', [])
         for option in self._get_special_fields(cr, uid, context=context):
             vals = self._add_order_extra_line(cr, uid, vals, option, context=context)
+
         return vals
 
     def _add_order_extra_line(self, cr, uid, vals, option, context):
@@ -235,29 +236,22 @@ class sale_order(Model):
                     partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
                         mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
 
+                if not context.get('is_tax_included', False) and context.get('use_external_tax'): 
+                    #If is tax_excluded adjustments are included in Order So we have to include it in line
+                    if order_resource.get('adjustments'):
+                        tax_adjustments = []
+                        for adj in order_resource.get('adjustments'):
+                            if adj.get('adjustment') \
+                              and adj['adjustment'].get('originator_type') == 'Spree::TaxRate':
+                                tax_adjustments.append(adj)
+                        for line in order_resource['line_items']:
+                            line['adjustments'] += tax_adjustments
+
                 res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
                 for key in result:
                     result[key].append(res.get(key, []))
 
         return result
-
-    
-    def _merge_with_default_values(self, cr, uid, external_session, ressource, vals, sub_mapping_list, defaults=None, context=None):
-        # if vals.get('name'):
-        #     shop = external_session.sync_from_object
-        #     if shop.order_prefix:
-        #         vals['name'] = '%s%s' %(shop.order_prefix, vals['name'])
-        if context is None: context ={}
-        if vals.get('payment_method_id'):
-            payment_method = self.pool.get('payment.method').browse(cr, uid, vals['payment_method_id'], context=context)
-            workflow_process = payment_method.workflow_process_id
-            if workflow_process:
-                vals['order_policy'] = workflow_process.order_policy
-                vals['picking_policy'] = workflow_process.picking_policy
-                vals['invoice_quantity'] = workflow_process.invoice_quantity
-        # update vals with order onchange in order to compute taxes
-        vals = self.play_sale_order_onchange(cr, uid, vals, defaults=defaults, context=context)
-        return super(sale_order, self)._merge_with_default_values(cr, uid, external_session, ressource, vals, sub_mapping_list, defaults=defaults, context=context)
 
 sale_order()
 
@@ -285,6 +279,7 @@ class sale_order_line(Model):
             #imported and a default value set by the onchange
             if 'tax_id' in line:
                 del line['tax_id']
+
         elif line and line.get('tax_id'):
             line['tax_id'] = [(6, 0, line['tax_id'])]
         return line
@@ -308,6 +303,7 @@ class sale_order_line(Model):
                                                                         defaults, context=context)
         if context.get('use_external_tax'):
             #get adjustment from resource
+            print "USE EXTERNAL TAX %s" % resource
             erp_tax_id = False
             if resource.get('adjustments'):
                 for adj in resource.get('adjustments'):
