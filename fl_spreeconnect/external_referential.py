@@ -27,6 +27,7 @@ from openerp.tools.config import config
 from base_external_referentials.decorator import only_for_referential
 from base_external_referentials.external_referentials import REF_VISIBLE_FIELDS
 from base_external_referentials.external_osv import ExternalSession
+from .spree_osv import Connection
 
 import requests
 from datetime import datetime
@@ -45,24 +46,19 @@ class external_referential(osv.osv):
     @only_for_referential('spree')
     def external_connection(self, cr, uid, id, debug=False, logger=False, context=None):
         if isinstance(id, list):
-            id = id[0]
+            id=id[0]
         referential = self.browse(cr, uid, id, context=context)
-        headers = {'content-type': 'application/json', 'X-Spree-Token': referential.apipass}
-        #Test connection returning headers
-        connection = requests.head("%s/api/products.json" % referential.location, headers=headers)
-        if connection.status_code != requests.codes.ok:
-            if config['debug_mode']: raise
-            raise osv.except_osv(_("Connection Error"), _("Could not connect to the Spree webservice\nCheck the webservice URL and password\nHTTP error code: %s"%connection.status_code))
-        return True
+        attr_conn = Connection(referential.location, referential.apipass, debug, logger)
+        return attr_conn or False
 
     @only_for_referential('spree')
     def product_category_import(self, cr, uid, ids, context=None):
-        self.import_resources(cr, uid, ids, 'product.category', context=context)
+        self.import_resources(cr, uid, ids, 'product.category', method='search_read_no_loop', context=context)
         return True
 
     @only_for_referential('spree')
     def product_import(self, cr, uid, ids, context=None):
-        self.import_resources(cr, uid, ids, 'product.template', context=context)
+        self.import_resources(cr, uid, ids, 'product.template', method='search_then_read', context=context)
         self.write(cr, uid, ids, {'last_product_import_date': datetime.now()})
         return True
 
@@ -174,7 +170,7 @@ class external_referential(osv.osv):
             oe_readable_field='name',
             compare_function=self._compare_countries, context=context)
 
-        self.import_resources(cr, uid, ids, 'payment.method', context=context)
+        self.import_resources(cr, uid, ids, 'payment.method', method='search_read_no_loop', context=context)
 
         return True
 

@@ -24,6 +24,7 @@ import requests
 
 from osv import osv, fields
 from openerp.osv.orm import Model
+from openerp.osv.osv import except_osv
 
 from base_external_referentials.decorator import only_for_referential, commit_now
 from base_external_referentials.external_osv import override, extend, ExternalSession
@@ -102,9 +103,11 @@ def _get_external_resource_ids(self, cr, uid, external_session, resource_filter=
         params.update(resource_filter)
 
     res = external_session.connection.call(list_method, params=resource_filter)
+
     ids = []
     if res.get(list_method):
         ids = map(lambda obj: obj.get(id_field), res[list_method])
+
     return ids
 
 Model._get_external_resource_ids = _get_external_resource_ids

@@ -20,6 +20,8 @@
 #
 ##############################################################################
 
+from datetime import datetime
+
 from osv import osv, fields
 from openerp.osv.orm import Model
 from tools.translate import _
@@ -50,7 +52,7 @@ class sale_shop(Model):
             })
 
             external_session = ExternalSession(shop.referential_id)
-            products = self.call_spree_method(cr, uid, external_session, 'products')
+            products = external_session.connection.call('products')
             page = 1
             total_pages = isinstance(products, dict) and products.get('pages', 1) or 1
             while page <= total_pages:
@@ -74,7 +76,7 @@ class sale_shop(Model):
                                 inventory_line = inventory_line_pool.create(cr, uid, inv_val)
                                 _logger.info("Created inventory line for external product %s and openerp product %s with qty %s" % (variant['id'], erp_product_id, variant['count_on_hand']))
                 page += 1
-                products = self.call_spree_method(cr, uid, external_session, 'products', params={'page': page})
+                products = external_session.connection.call('products', params={'page': page})
             return True
 
     def export_inventory(self, cr, uid, ids, context=None):
@@ -98,36 +100,38 @@ class sale_shop(Model):
 
                 
     def import_orders(self, cr, uid, ids, context=None):
-        self.import_resources(cr, uid, ids, 'sale.order', context=context)
+        ctx = dict(context)
+        ctx['filter_params'] = {'q[state_eq]': 'complete'}
+        self.import_resources(cr, uid, ids, 'sale.order', method='search_then_read', context=context)
         return True
 
-    def import_resources(self, cr, uid, ids, resource_name, context=None):
-        """Abstract function to import resources from a shop / a referential...
+    # def import_resources(self, cr, uid, ids, resource_name, context=None):
+    #     """Abstract function to import resources from a shop / a referential...
 
-        :param list ids: list of id
-        :param str ressource_name: the resource name to import
-        :param str method: method used for importing the resource (search_then_read,
-                                search_then_read_no_loop, search_read, search_read_no_loop )
-        :rtype: dict
-        :return: dictionary with the key "create_ids" and "write_ids" which containt the id created/written
-        """
-        if context is None: context={}
-        result = {"create_ids" : [], "write_ids" : []}
-        for browse_record in self.browse(cr, uid, ids, context=context):
-            if browse_record._name == 'external.referential':
-                external_session = ExternalSession(browse_record, browse_record)
-            else:
-                if hasattr(browse_record, 'referential_id'):
-                    context['%s_id'%browse_record._name.replace('.', '_')] = browse_record.id
-                    external_session = ExternalSession(browse_record.referential_id, browse_record)
-                else:
-                    raise except_osv(_("Not Implemented"),
-                                         _("The field referential_id doesn't exist on the object %s. Reporting system can not be used") % (browse_record._name,))
-            defaults = self.pool.get(resource_name)._get_default_import_values(cr, uid, external_session, context=context)
-            res = self.pool.get(resource_name)._import_resources(cr, uid, external_session, defaults, context=context)
-            for key in result:
-                result[key].append(res.get(key, []))
-        return result
+    #     :param list ids: list of id
+    #     :param str ressource_name: the resource name to import
+    #     :param str method: method used for importing the resource (search_then_read,
+    #                             search_then_read_no_loop, search_read, search_read_no_loop )
+    #     :rtype: dict
+    #     :return: dictionary with the key "create_ids" and "write_ids" which containt the id created/written
+    #     """
+    #     if context is None: context={}
+    #     result = {"create_ids" : [], "write_ids" : []}
+    #     for browse_record in self.browse(cr, uid, ids, context=context):
+    #         if browse_record._name == 'external.referential':
+    #             external_session = ExternalSession(browse_record, browse_record)
+    #         else:
+    #             if hasattr(browse_record, 'referential_id'):
+    #                 context['%s_id'%browse_record._name.replace('.', '_')] = browse_record.id
+    #                 external_session = ExternalSession(browse_record.referential_id, browse_record)
+    #             else:
+    #                 raise except_osv(_("Not Implemented"),
+    #                                      _("The field referential_id doesn't exist on the object %s. Reporting system can not be used") % (browse_record._name,))
+    #         defaults = self.pool.get(resource_name)._get_default_import_values(cr, uid, external_session, context=context)
+    #         res = self.pool.get(resource_name)._import_resources(cr, uid, external_session, defaults, context=context)
+    #         for key in result:
+    #             result[key].append(res.get(key, []))
+    #     return result
 
 sale_shop()
 
@@ -135,12 +139,33 @@ class sale_order(Model):
     _inherit = 'sale.order'
 
     @only_for_referential('spree')
-    def _get_filter(self, cr, uid, external_session, page, previous_filter=None, context=None):
-        params = {}
-        if page:
-            params['page'] = page
-            params['q[state_eq]'] = "complete"
-        return params
+    def _get_external_resource_ids(self, cr, uid, external_session, resource_filter=None, \
+            mapping=None, mapping_id=None, context=None):
+        mapping, mapping_id = self._init_mapping(cr, uid, external_session.referential_id.id, mapping=mapping, mapping_id=mapping_id, context=context)
+        ext_resource = mapping[mapping_id]['external_resource_name']
+        list_method = mapping[mapping_id]['external_list_method']
+        get_method = mapping[mapping_id]['external_get_method']
+
+        id_field = 'number'
+
+        if not list_method:
+            if not get_method:
+                raise except_osv(_('User Error'), _('There is not list method for the mapping %s')%(mapping[mapping_id]['model'],))
+            else:
+                #Return [None] because in Spree are models with only one record. List Method is not defined in mapping
+                return [None]
+
+        params = {'fields': 'id'}
+        if resource_filter:
+            params.update(resource_filter)
+
+        res = external_session.connection.call(list_method, params=resource_filter)
+
+        ids = []
+        if res.get(list_method):
+            ids = map(lambda obj: obj.get(id_field), res[list_method])
+
+        return ids
 
     def _convert_special_fields(self, cr, uid, vals, referential_id, context=None):
         vals['order_line'] = vals.get('order_line', [])
@@ -199,79 +224,79 @@ class sale_order(Model):
         vals['order_line'].append((0, 0, extra_line))
         return vals
 
-    def _import_resources(self, cr, uid, external_session, defaults=None, context=None):
-        if context is None: context = {}
-        if defaults is None: defaults = {}
+    # def _import_resources(self, cr, uid, external_session, defaults=None, context=None):
+    #     if context is None: context = {}
+    #     if defaults is None: defaults = {}
 
-        partner_pool = self.pool.get('res.partner')
-        partner_address_pool = self.pool.get('res.partner.address')
-        sale_line_pool = self.pool.get('sale.order.line')
+    #     partner_pool = self.pool.get('res.partner')
+    #     partner_address_pool = self.pool.get('res.partner.address')
+    #     sale_line_pool = self.pool.get('sale.order.line')
 
-        external_session.logger.info("Start to import the ressource %s"%(self._name,))
-        result = {"create_ids" : [], "write_ids" : []}
-        mapping, mapping_id = self._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-        partner_mapping, partner_mapping_id = partner_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-        partner_address_mapping, partner_address_mapping_id = partner_address_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-        sale_line_mapping, sale_line_mapping_id = sale_line_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
+    #     external_session.logger.info("Start to import the ressource %s"%(self._name,))
+    #     result = {"create_ids" : [], "write_ids" : []}
+    #     mapping, mapping_id = self._init_mapping(cr, uid, external_session.referential_id.id, context=context)
+    #     partner_mapping, partner_mapping_id = partner_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
+    #     partner_address_mapping, partner_address_mapping_id = partner_address_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
+    #     sale_line_mapping, sale_line_mapping_id = sale_line_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
 
-        if mapping[mapping_id].get('mapping_lines', False):
-            external_resource_name = mapping[mapping_id]['external_resource_name']
-            resource_filter = None
-            page = 1
-            #paginated results in spree
-            resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
-            order_list = self.call_spree_method(cr, uid, external_session, "orders", method="GET", params=resource_filter, context=context)
-            total_pages = order_list.get('pages',1)
-            order_numbers = map(lambda o: o['number'], order_list['orders'])
+    #     if mapping[mapping_id].get('mapping_lines', False):
+    #         external_resource_name = mapping[mapping_id]['external_resource_name']
+    #         resource_filter = None
+    #         page = 1
+    #         #paginated results in spree
+    #         resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
+    #         order_list = self.call_spree_method(cr, uid, external_session, "orders", method="GET", params=resource_filter, context=context)
+    #         total_pages = order_list.get('pages',1)
+    #         order_numbers = map(lambda o: o['number'], order_list['orders'])
             
-            while page < total_pages:
-                page += 1
-                resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
-                order_list = self.call_spree_method(cr, uid, external_session, "orders", method="GET", params=resource_filter, context=context)
-                order_numbers += map(lambda o: o['number'], order_list['orders'])
+    #         while page < total_pages:
+    #             page += 1
+    #             resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
+    #             order_list = self.call_spree_method(cr, uid, external_session, "orders", method="GET", params=resource_filter, context=context)
+    #             order_numbers += map(lambda o: o['number'], order_list['orders'])
 
-            for number in order_numbers:
-                partner_data = {}
-                order_resource = self.call_spree_method(cr, uid, external_session, "orders/%s" % number, method="GET", context=context)
-                #Sync partner
-                order_resource['partner_id'] = order_resource.get('user_id')
-                if partner_mapping[partner_mapping_id].get('mapping_lines',False) and \
-                  order_resource.get('email') and order_resource.get('user_id'):
-                    partner_data = {'email': order_resource.get('email'), 'user_id': order_resource.get('user_id')}
-                    partner_res = partner_pool._record_external_resources(cr, uid, external_session, [partner_data], 
-                        mapping=partner_mapping, mapping_id=partner_mapping_id, context=context)
+    #         for number in order_numbers:
+    #             partner_data = {}
+    #             order_resource = self.call_spree_method(cr, uid, external_session, "orders/%s" % number, method="GET", context=context)
+    #             #Sync partner
+    #             order_resource['partner_id'] = order_resource.get('user_id')
+    #             if partner_mapping[partner_mapping_id].get('mapping_lines',False) and \
+    #               order_resource.get('email') and order_resource.get('user_id'):
+    #                 partner_data = {'email': order_resource.get('email'), 'user_id': order_resource.get('user_id')}
+    #                 partner_res = partner_pool._record_external_resources(cr, uid, external_session, [partner_data], 
+    #                     mapping=partner_mapping, mapping_id=partner_mapping_id, context=context)
 
-                #Set partner_id and type in bill_address and ship_address
-                if order_resource.get('bill_address'):
-                    order_resource['bill_address']['partner_id'] = order_resource['user_id']
-                    order_resource['bill_address']['type'] = 'invoice'
-                    order_resource['bill_address_id'] = order_resource['bill_address']['id']
-                    partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['bill_address']],
-                        mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
+    #             #Set partner_id and type in bill_address and ship_address
+    #             if order_resource.get('bill_address'):
+    #                 order_resource['bill_address']['partner_id'] = order_resource['user_id']
+    #                 order_resource['bill_address']['type'] = 'invoice'
+    #                 order_resource['bill_address_id'] = order_resource['bill_address']['id']
+    #                 partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['bill_address']],
+    #                     mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
 
-                if order_resource.get('ship_address'):
-                    order_resource['ship_address']['partner_id'] = order_resource['user_id']
-                    order_resource['ship_address']['type'] = 'delivery'
-                    order_resource['ship_address_id'] = order_resource['ship_address']['id']
-                    partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
-                        mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
+    #             if order_resource.get('ship_address'):
+    #                 order_resource['ship_address']['partner_id'] = order_resource['user_id']
+    #                 order_resource['ship_address']['type'] = 'delivery'
+    #                 order_resource['ship_address_id'] = order_resource['ship_address']['id']
+    #                 partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
+    #                     mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
 
-                if not context.get('is_tax_included', False) and context.get('use_external_tax'): 
-                    #If is tax_excluded adjustments are included in Order So we have to include it in line
-                    if order_resource.get('adjustments'):
-                        tax_adjustments = []
-                        for adj in order_resource.get('adjustments'):
-                            if adj.get('adjustment') \
-                              and adj['adjustment'].get('originator_type') == 'Spree::TaxRate':
-                                tax_adjustments.append(adj)
-                        for line in order_resource['line_items']:
-                            line['adjustments'] += tax_adjustments
+    #             if not context.get('is_tax_included', False) and context.get('use_external_tax'): 
+    #                 #If is tax_excluded adjustments are included in Order So we have to include it in line
+    #                 if order_resource.get('adjustments'):
+    #                     tax_adjustments = []
+    #                     for adj in order_resource.get('adjustments'):
+    #                         if adj.get('adjustment') \
+    #                           and adj['adjustment'].get('originator_type') == 'Spree::TaxRate':
+    #                             tax_adjustments.append(adj)
+    #                     for line in order_resource['line_items']:
+    #                         line['adjustments'] += tax_adjustments
 
-                res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
-                for key in result:
-                    result[key].append(res.get(key, []))
+    #             res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+    #             for key in result:
+    #                 result[key].append(res.get(key, []))
 
-        return result
+    #     return result
 
 sale_order()
 
@@ -284,6 +309,7 @@ class sale_order_line(Model):
             context = {}
         if defaults is None:
             defaults = {}
+        print line
         original_line = line.copy()
         if not context.get('use_external_tax') and 'tax_id' in line:
             del line['tax_id']

@@ -27,9 +27,13 @@ class product_template(osv.osv):
     _inherit = 'product.template'
 
     @only_for_referential('spree')
-    @open_report
-    def _import_resources(self, *args, **kwargs):
-        return super(product_template, self)._import_resources(*args, **kwargs)
+    def _record_one_external_resource(self, cr, uid, external_session, resource, defaults=None,
+            mapping=None, mapping_id=None, context=None):
+
+        res = super(product_template, self)._record_one_external_resource(cr, uid, external_session, resource,
+            defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+
+        return res
 
 product_template()
 
@@ -60,3 +64,39 @@ class product_product(osv.osv):
         return True
         
 product_product()
+
+class product_category(osv.osv):
+    _inherit = 'product.category'
+
+    @only_for_referential('spree')
+    def _record_one_external_resource(self, cr, uid, external_session, resource, defaults=None,
+            mapping=None, mapping_id=None, context=None):
+
+        res = super(product_category, self)._record_one_external_resource(cr, uid, external_session, resource,
+            defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
+
+        root_resource = {}
+        root_res = False
+        if resource.get('root'):
+            root_resource = resource['root']
+            root_res = self._record_one_external_resource(cr, uid, external_session, root_resource,
+                mapping=mapping, mapping_id=mapping_id, context=context)
+
+        taxons = root_resource.get('taxons') or resource.get('taxons')
+        parent_id = False
+        if root_res:
+            parent_id = root_res.get('write_id') or root_res.get('create_id')
+        else:
+            parent_id = res.get('write_id') or res.get('create_id')
+
+        if taxons:            
+            categ_defaults = {
+                'parent_id': parent_id
+            }
+            for taxon in taxons:
+                cat_res = self._record_one_external_resource(cr, uid, 
+                    external_session, taxon, defaults=categ_defaults, context=context)
+            
+        return res
+
+product_category()
