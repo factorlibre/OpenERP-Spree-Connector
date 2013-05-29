@@ -188,6 +188,56 @@ class sale_order(Model):
         vals['order_line'] = vals.get('order_line', [])
         return super(sale_order, self)._convert_special_fields(cr, uid, vals, referential_id, context=context)
 
+    def _add_order_extra_line(self, cr, uid, vals, option, context):
+        """ Add or substract amount on order as a separate line item with single quantity for each type of amounts like :
+        shipping, cash on delivery, discount, gift certificates...
+
+        :param dict vals: values of the sale order to create
+        :param option: dictionnary of option for the special field to process
+        """
+        if context is None: context={}
+        sign = option.get('sign', 1)
+        if context.get('is_tax_included') and vals.get(option['price_unit_tax_included']):
+            price_unit = vals.pop(option['price_unit_tax_included']) * sign
+        elif vals.get(option['price_unit_tax_excluded']):
+            price_unit = vals.pop(option['price_unit_tax_excluded']) * sign
+        else:
+            for key in ['price_unit_tax_excluded', 'price_unit_tax_included', 'tax_rate_field']:
+                if option.get(key) and option[key] in vals:
+                    del vals[option[key]]
+            return vals #if there is not price, we have nothing to import
+
+        model_data_obj = self.pool.get('ir.model.data')
+        model, product_id = model_data_obj.get_object_reference(cr, uid, *option['product_ref'])
+        product = self.pool.get('product.product').browse(cr, uid, product_id, context)
+
+        extra_line = {
+            'product_id': product.id,
+            'name': product.name,
+            'product_uom': product.uom_id.id,
+            'product_uom_qty': 1,
+            'price_unit': price_unit,
+        }
+
+        extra_line = self.pool.get('sale.order.line').play_sale_order_line_onchange(cr, uid, extra_line, vals, vals['order_line'], context=context)
+        if context.get('use_external_tax') and option.get('tax_rate_field'):
+            tax_rate = vals.pop(option['tax_rate_field'])
+            if tax_rate:
+                line_tax_id = self.pool.get('account.tax').get_tax_from_rate(cr, uid, tax_rate, context.get('is_tax_included'), context=context)
+                if not line_tax_id:
+                    raise except_osv(_('Error'), _('No tax id found for the rate %s with the tax include = %s')%(tax_rate, context.get('is_tax_included')))
+                extra_line['tax_id'] = [(6, 0, [line_tax_id])]
+            else:
+                extra_line['tax_id'] = False
+        if not option.get('tax_rate_field'):
+            if extra_line.get('tax_id'):
+                del extra_line['tax_id']
+        ext_code_field = option.get('code_field')
+        if ext_code_field and vals.get(ext_code_field):
+            extra_line['name'] = "%s [%s]" % (extra_line['name'], vals[ext_code_field])
+        vals['order_line'].append((0, 0, extra_line))
+        return vals
+
 sale_order()
 
 class sale_order_line(Model):
