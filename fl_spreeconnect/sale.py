@@ -21,6 +21,7 @@
 ##############################################################################
 
 from datetime import datetime
+import dateutil.parser
 
 from osv import osv, fields
 from openerp.osv.orm import Model
@@ -110,32 +111,14 @@ sale_shop()
 class sale_order(Model):
     _inherit = 'sale.order'
 
-    @only_for_referential('spree')
-    def _merge_with_default_values(self, cr, uid, external_session, resource, vals, sub_mapping_list, defaults=None, context=None):
-        address_pool = self.pool.get('res.partner.address')
-        resource_partner = {'email': resource.get('email'), 'user_id': resource.get('user_id')}
-        res_partner = self.pool.get('res.partner')._record_one_external_resource(cr, uid, external_session,
-                resource_partner, context=context)
-        vals['partner_id'] = res_partner.get('write_id') or res_partner.get('create_id')
-
-        address_defaults = {'partner_id': vals['partner_id'] }
-        address_types = {'bill_address': 'invoice', 'ship_address': 'delivery'}
-        for addr_key in address_types.keys():
-            if resource.get(addr_key):                
-                address_id = address_pool.get_oeid(cr, uid, resource[addr_key]['id'], 
-                    external_session.referential_id.id, context=context)
-                if not address_id:
-                    address_defaults.update({'type': address_types[addr_key]})
-                    addr_res = address_pool._record_one_external_resource(cr, uid, external_session,
-                        resource.get(addr_key), defaults=address_defaults, context=context)
-                    address_id = addr_res.get('write_id') or addr_res.get('create_id')
-                if addr_key == 'bill_address':
-                    vals['partner_billing_id'] = address_id
-                else:
-                    vals['partner_shipping_id'] = address_id
-
-
-        return super(sale_order, self)._merge_with_default_values(cr, uid, external_session, resource, vals, sub_mapping_list, defaults=defaults, context=context)
+    def add_adjustment_line(self, cr, uid, resource, context=None):
+        taxes = []
+        for adj in resource.get('adjustments', []):
+            if adj['originator_type'] == 'Spree::TaxRate':
+                taxes.append(adj)
+        for line in resource.get('line_items', []):
+            line.update({'adjustments': taxes})
+        return resource
 
     @only_for_referential('spree')
     def _get_external_resource_ids(self, cr, uid, external_session, resource_filter=None, \
@@ -166,169 +149,51 @@ class sale_order(Model):
 
         return ids
 
+    @only_for_referential('spree')
+    def _transform_one_resource(self, cr, uid, external_session, convertion_type, resource, mapping, mapping_id, \
+                     mapping_line_filter_ids=None, parent_data=None, previous_result=None, defaults=None, context=None):
+
+        resource = self.add_adjustment_line(cr, uid, resource, context=context)
+        return super(sale_order, self)._transform_one_resource(cr, uid, external_session, convertion_type, resource,\
+                 mapping, mapping_id,  mapping_line_filter_ids=mapping_line_filter_ids, parent_data=parent_data,\
+                 previous_result=previous_result, defaults=defaults, context=context)
+
+    @only_for_referential('spree')
+    def _merge_with_default_values(self, cr, uid, external_session, resource, vals, sub_mapping_list, defaults=None, context=None):
+        address_pool = self.pool.get('res.partner.address')
+        resource_partner = {'email': resource.get('email'), 'user_id': resource.get('user_id')}
+        res_partner = self.pool.get('res.partner')._record_one_external_resource(cr, uid, external_session,
+                resource_partner, context=context)
+        vals['partner_id'] = res_partner.get('write_id') or res_partner.get('create_id')
+
+        address_defaults = {'partner_id': vals['partner_id'] }
+        address_types = {'bill_address': 'invoice', 'ship_address': 'delivery'}
+        for addr_key in address_types.keys():
+            if resource.get(addr_key):                
+                address_id = address_pool.get_oeid(cr, uid, resource[addr_key]['id'], 
+                    external_session.referential_id.id, context=context)
+                if not address_id:
+                    address_defaults.update({'type': address_types[addr_key]})
+                    addr_res = address_pool._record_one_external_resource(cr, uid, external_session,
+                        resource.get(addr_key), defaults=address_defaults, context=context)
+                    address_id = addr_res.get('write_id') or addr_res.get('create_id')
+                if addr_key == 'bill_address':
+                    vals['partner_invoice_id'] = address_id
+                else:
+                    vals['partner_shipping_id'] = address_id
+
+        return super(sale_order, self)._merge_with_default_values(cr, uid, external_session, resource, vals, sub_mapping_list, defaults=defaults, context=context)
+
     def _convert_special_fields(self, cr, uid, vals, referential_id, context=None):
         vals['order_line'] = vals.get('order_line', [])
-        for option in self._get_special_fields(cr, uid, context=context):
-            vals = self._add_order_extra_line(cr, uid, vals, option, context=context)
-
-        return vals
-
-    def _add_order_extra_line(self, cr, uid, vals, option, context):
-        """ Add or substract amount on order as a separate line item with single quantity for each type of amounts like :
-        shipping, cash on delivery, discount, gift certificates...
-
-        :param dict vals: values of the sale order to create
-        :param option: dictionnary of option for the special field to process
-        """
-        if context is None: context={}
-        sign = option.get('sign', 1)
-        if context.get('is_tax_included') and vals.get(option['price_unit_tax_included']):
-            price_unit = vals.pop(option['price_unit_tax_included']) * sign
-        elif vals.get(option['price_unit_tax_excluded']):
-            price_unit = vals.pop(option['price_unit_tax_excluded']) * sign
-        else:
-            for key in ['price_unit_tax_excluded', 'price_unit_tax_included', 'tax_rate_field']:
-                if option.get(key) and option[key] in vals:
-                    del vals[option[key]]
-            return vals #if there is not price, we have nothing to import
-
-        model_data_obj = self.pool.get('ir.model.data')
-        model, product_id = model_data_obj.get_object_reference(cr, uid, *option['product_ref'])
-        product = self.pool.get('product.product').browse(cr, uid, product_id, context)
-
-        extra_line = {
-            'product_id': product.id,
-            'name': product.name,
-            'product_uom': product.uom_id.id,
-            'product_uom_qty': 1,
-            'price_unit': price_unit,
-        }
-
-        extra_line = self.pool.get('sale.order.line').play_sale_order_line_onchange(cr, uid, extra_line, vals, vals['order_line'], context=context)
-        if context.get('use_external_tax') and option.get('tax_rate_field'):
-            tax_rate = vals.get(option['tax_rate_field'])
-            if tax_rate:
-                del vals[option['tax_rate_field']]
-                line_tax_id = self.pool.get('account.tax').get_tax_from_rate(cr, uid, tax_rate, context.get('is_tax_included'), context=context)
-                if not line_tax_id:
-                    raise except_osv(_('Error'), _('No tax id found for the rate %s with the tax include = %s')%(tax_rate, context.get('is_tax_included')))
-                extra_line['tax_id'] = [(6, 0, [line_tax_id])]
-            else:
-                extra_line['tax_id'] = False
-        if not option.get('tax_rate_field') and extra_line.get('tax_id'):
-            del extra_line['tax_id']
-        ext_code_field = option.get('code_field')
-        if ext_code_field and vals.get(ext_code_field):
-            extra_line['name'] = "%s [%s]" % (extra_line['name'], vals[ext_code_field])
-        vals['order_line'].append((0, 0, extra_line))
-        return vals
-
-    # def _import_resources(self, cr, uid, external_session, defaults=None, context=None):
-    #     if context is None: context = {}
-    #     if defaults is None: defaults = {}
-
-    #     partner_pool = self.pool.get('res.partner')
-    #     partner_address_pool = self.pool.get('res.partner.address')
-    #     sale_line_pool = self.pool.get('sale.order.line')
-
-    #     external_session.logger.info("Start to import the ressource %s"%(self._name,))
-    #     result = {"create_ids" : [], "write_ids" : []}
-    #     mapping, mapping_id = self._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-    #     partner_mapping, partner_mapping_id = partner_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-    #     partner_address_mapping, partner_address_mapping_id = partner_address_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-    #     sale_line_mapping, sale_line_mapping_id = sale_line_pool._init_mapping(cr, uid, external_session.referential_id.id, context=context)
-
-    #     if mapping[mapping_id].get('mapping_lines', False):
-    #         external_resource_name = mapping[mapping_id]['external_resource_name']
-    #         resource_filter = None
-    #         page = 1
-    #         #paginated results in spree
-    #         resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
-    #         order_list = self.call_spree_method(cr, uid, external_session, "orders", method="GET", params=resource_filter, context=context)
-    #         total_pages = order_list.get('pages',1)
-    #         order_numbers = map(lambda o: o['number'], order_list['orders'])
-            
-    #         while page < total_pages:
-    #             page += 1
-    #             resource_filter = self._get_filter(cr, uid, external_session, page, previous_filter=resource_filter, context=context)
-    #             order_list = self.call_spree_method(cr, uid, external_session, "orders", method="GET", params=resource_filter, context=context)
-    #             order_numbers += map(lambda o: o['number'], order_list['orders'])
-
-    #         for number in order_numbers:
-    #             partner_data = {}
-    #             order_resource = self.call_spree_method(cr, uid, external_session, "orders/%s" % number, method="GET", context=context)
-    #             #Sync partner
-    #             order_resource['partner_id'] = order_resource.get('user_id')
-    #             if partner_mapping[partner_mapping_id].get('mapping_lines',False) and \
-    #               order_resource.get('email') and order_resource.get('user_id'):
-    #                 partner_data = {'email': order_resource.get('email'), 'user_id': order_resource.get('user_id')}
-    #                 partner_res = partner_pool._record_external_resources(cr, uid, external_session, [partner_data], 
-    #                     mapping=partner_mapping, mapping_id=partner_mapping_id, context=context)
-
-    #             #Set partner_id and type in bill_address and ship_address
-    #             if order_resource.get('bill_address'):
-    #                 order_resource['bill_address']['partner_id'] = order_resource['user_id']
-    #                 order_resource['bill_address']['type'] = 'invoice'
-    #                 order_resource['bill_address_id'] = order_resource['bill_address']['id']
-    #                 partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['bill_address']],
-    #                     mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
-
-    #             if order_resource.get('ship_address'):
-    #                 order_resource['ship_address']['partner_id'] = order_resource['user_id']
-    #                 order_resource['ship_address']['type'] = 'delivery'
-    #                 order_resource['ship_address_id'] = order_resource['ship_address']['id']
-    #                 partner_address_pool._record_external_resources(cr, uid, external_session, [order_resource['ship_address']],
-    #                     mapping=partner_address_mapping, mapping_id=partner_address_mapping_id, context=context)
-
-    #             if not context.get('is_tax_included', False) and context.get('use_external_tax'): 
-    #                 #If is tax_excluded adjustments are included in Order So we have to include it in line
-    #                 if order_resource.get('adjustments'):
-    #                     tax_adjustments = []
-    #                     for adj in order_resource.get('adjustments'):
-    #                         if adj.get('adjustment') \
-    #                           and adj['adjustment'].get('originator_type') == 'Spree::TaxRate':
-    #                             tax_adjustments.append(adj)
-    #                     for line in order_resource['line_items']:
-    #                         line['adjustments'] += tax_adjustments
-
-    #             res = self._record_external_resources(cr, uid, external_session, [order_resource], defaults=defaults, mapping=mapping, mapping_id=mapping_id, context=context)
-    #             for key in result:
-    #                 result[key].append(res.get(key, []))
-
-    #     return result
+        return super(sale_order, self)._convert_special_fields(cr, uid, vals, referential_id, context=context)
 
 sale_order()
 
 class sale_order_line(Model):
     _inherit = 'sale.order.line'
 
-    def play_sale_order_line_onchange(self, cr, uid, line, parent_data, previous_lines, defaults=None, context=None):
-        account_tax = self.pool.get('account.tax')
-        if context is None:
-            context = {}
-        if defaults is None:
-            defaults = {}
-
-        original_line = line.copy()
-        if not context.get('use_external_tax') and 'tax_id' in line:
-            del line['tax_id']
-        if parent_data is None:
-            parent_data = context.get('parent_data', {})
-
-        line = self.call_onchange(cr, uid, 'product_id_change', line, defaults=defaults, parent_data=parent_data or {}, previous_lines=previous_lines or {}, context=context)
-        #TODO all m2m should be mapped correctly
-        if context.get('use_external_tax'):
-            #if we use the external tax and the onchange have added a taxe, 
-            #them we remove it.
-            #Indeed we have to make the difference between a real tax_id
-            #imported and a default value set by the onchange
-            if 'tax_id' in line:
-                del line['tax_id']
-
-        elif line and line.get('tax_id'):
-            line['tax_id'] = [(6, 0, line['tax_id'])]
-        return line
-
+    @only_for_referential('spree')
     def _transform_one_resource(self, cr, uid, external_session, convertion_type, resource, mapping, mapping_id,
                      mapping_line_filter_ids=None, parent_data=None, previous_result=None, defaults=None, context=None):
 
@@ -350,10 +215,8 @@ class sale_order_line(Model):
             #get adjustment from resource
             erp_tax_id = False
             if resource.get('adjustments'):
-                for adj in resource.get('adjustments'):
-                    adjustment = adj['adjustment']
-                    if adjustment['originator_type'] == 'Spree::TaxRate':
-                        erp_tax_id = account_tax.get_oeid(cr, uid, adjustment['originator_id'], 
+                for adj in resource.get('adjustments', []):
+                    erp_tax_id = account_tax.get_oeid(cr, uid, adj['originator_id'], 
                             external_session.referential_id.id, context=context)
             if erp_tax_id:
                 line['tax_id'] = [(6, 0, [erp_tax_id])]
