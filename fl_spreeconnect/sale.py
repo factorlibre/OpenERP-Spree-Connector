@@ -20,12 +20,14 @@
 #
 ##############################################################################
 
+import time
 from datetime import datetime
 import dateutil.parser
 
 from osv import osv, fields
 from openerp.osv.orm import Model
 from tools.translate import _
+from tools import DEFAULT_SERVER_DATETIME_FORMAT, DEFAULT_SERVER_DATE_FORMAT
 from base_external_referentials.external_osv import ExternalSession, override
 from base_external_referentials.decorator import only_for_referential
 import netsvc
@@ -101,9 +103,8 @@ class sale_shop(Model):
 
                 
     def import_orders(self, cr, uid, ids, context=None):
-        ctx = dict(context)
-        ctx['filter_params'] = {'q[state_eq]': 'complete'}
         self.import_resources(cr, uid, ids, 'sale.order', method='search_then_read', context=context)
+        self.write(cr, uid, ids, {'import_orders_from_date': time.strftime(DEFAULT_SERVER_DATETIME_FORMAT)})
         return True
 
 sale_shop()
@@ -154,6 +155,7 @@ class sale_order(Model):
                      mapping_line_filter_ids=None, parent_data=None, previous_result=None, defaults=None, context=None):
 
         resource = self.add_adjustment_line(cr, uid, resource, context=context)
+
         return super(sale_order, self)._transform_one_resource(cr, uid, external_session, convertion_type, resource,\
                  mapping, mapping_id,  mapping_line_filter_ids=mapping_line_filter_ids, parent_data=parent_data,\
                  previous_result=previous_result, defaults=defaults, context=context)
@@ -237,6 +239,21 @@ class sale_order(Model):
             extra_line['name'] = "%s [%s]" % (extra_line['name'], vals[ext_code_field])
         vals['order_line'].append((0, 0, extra_line))
         return vals
+
+    @only_for_referential('spree')
+    def _get_filter(self, cr, uid, external_session, step, previous_filter=None, context=None):
+        order_filter = super(sale_order, self)._get_filter(cr, uid, external_session, step, 
+            previous_filter=previous_filter, context=context)
+        order_filter['q[state_eq]'] = 'complete'
+        order_filter['q[completed_at_present'] = 1
+        shop = False
+        if external_session.sync_from_object._name == 'sale.shop':
+            shop = external_session.sync_from_object
+        elif context.get('sale_shop_id'):
+            shop = self.pool.get('sale.shop').browse(cr, uid,  context['sale_shop_id'], context=context)
+        # if shop and shop.import_orders_from_date:
+        #     order_filter['q[completed_at_gt]'] = shop.import_orders_from_date
+        return order_filter
 
 sale_order()
 
