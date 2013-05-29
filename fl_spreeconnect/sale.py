@@ -105,38 +105,37 @@ class sale_shop(Model):
         self.import_resources(cr, uid, ids, 'sale.order', method='search_then_read', context=context)
         return True
 
-    # def import_resources(self, cr, uid, ids, resource_name, context=None):
-    #     """Abstract function to import resources from a shop / a referential...
-
-    #     :param list ids: list of id
-    #     :param str ressource_name: the resource name to import
-    #     :param str method: method used for importing the resource (search_then_read,
-    #                             search_then_read_no_loop, search_read, search_read_no_loop )
-    #     :rtype: dict
-    #     :return: dictionary with the key "create_ids" and "write_ids" which containt the id created/written
-    #     """
-    #     if context is None: context={}
-    #     result = {"create_ids" : [], "write_ids" : []}
-    #     for browse_record in self.browse(cr, uid, ids, context=context):
-    #         if browse_record._name == 'external.referential':
-    #             external_session = ExternalSession(browse_record, browse_record)
-    #         else:
-    #             if hasattr(browse_record, 'referential_id'):
-    #                 context['%s_id'%browse_record._name.replace('.', '_')] = browse_record.id
-    #                 external_session = ExternalSession(browse_record.referential_id, browse_record)
-    #             else:
-    #                 raise except_osv(_("Not Implemented"),
-    #                                      _("The field referential_id doesn't exist on the object %s. Reporting system can not be used") % (browse_record._name,))
-    #         defaults = self.pool.get(resource_name)._get_default_import_values(cr, uid, external_session, context=context)
-    #         res = self.pool.get(resource_name)._import_resources(cr, uid, external_session, defaults, context=context)
-    #         for key in result:
-    #             result[key].append(res.get(key, []))
-    #     return result
-
 sale_shop()
 
 class sale_order(Model):
     _inherit = 'sale.order'
+
+    @only_for_referential('spree')
+    def _merge_with_default_values(self, cr, uid, external_session, resource, vals, sub_mapping_list, defaults=None, context=None):
+        address_pool = self.pool.get('res.partner.address')
+        resource_partner = {'email': resource.get('email'), 'user_id': resource.get('user_id')}
+        res_partner = self.pool.get('res.partner')._record_one_external_resource(cr, uid, external_session,
+                resource_partner, context=context)
+        vals['partner_id'] = res_partner.get('write_id') or res_partner.get('create_id')
+
+        address_defaults = {'partner_id': vals['partner_id'] }
+        address_types = {'bill_address': 'invoice', 'ship_address': 'delivery'}
+        for addr_key in address_types.keys():
+            if resource.get(addr_key):                
+                address_id = address_pool.get_oeid(cr, uid, resource[addr_key]['id'], 
+                    external_session.referential_id.id, context=context)
+                if not address_id:
+                    address_defaults.update({'type': address_types[addr_key]})
+                    addr_res = address_pool._record_one_external_resource(cr, uid, external_session,
+                        resource.get(addr_key), defaults=address_defaults, context=context)
+                    address_id = addr_res.get('write_id') or addr_res.get('create_id')
+                if addr_key == 'bill_address':
+                    vals['partner_billing_id'] = address_id
+                else:
+                    vals['partner_shipping_id'] = address_id
+
+
+        return super(sale_order, self)._merge_with_default_values(cr, uid, external_session, resource, vals, sub_mapping_list, defaults=defaults, context=context)
 
     @only_for_referential('spree')
     def _get_external_resource_ids(self, cr, uid, external_session, resource_filter=None, \
@@ -198,12 +197,12 @@ class sale_order(Model):
         product = self.pool.get('product.product').browse(cr, uid, product_id, context)
 
         extra_line = {
-                        'product_id': product.id,
-                        'name': product.name,
-                        'product_uom': product.uom_id.id,
-                        'product_uom_qty': 1,
-                        'price_unit': price_unit,
-                    }
+            'product_id': product.id,
+            'name': product.name,
+            'product_uom': product.uom_id.id,
+            'product_uom_qty': 1,
+            'price_unit': price_unit,
+        }
 
         extra_line = self.pool.get('sale.order.line').play_sale_order_line_onchange(cr, uid, extra_line, vals, vals['order_line'], context=context)
         if context.get('use_external_tax') and option.get('tax_rate_field'):
@@ -309,7 +308,7 @@ class sale_order_line(Model):
             context = {}
         if defaults is None:
             defaults = {}
-        print line
+
         original_line = line.copy()
         if not context.get('use_external_tax') and 'tax_id' in line:
             del line['tax_id']
@@ -349,7 +348,6 @@ class sale_order_line(Model):
                                                                         defaults, context=context)
         if context.get('use_external_tax'):
             #get adjustment from resource
-            print "USE EXTERNAL TAX %s" % resource
             erp_tax_id = False
             if resource.get('adjustments'):
                 for adj in resource.get('adjustments'):
