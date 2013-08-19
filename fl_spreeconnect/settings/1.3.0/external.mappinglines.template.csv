@@ -1,38 +1,38 @@
-id,mapping_id:id,sequence,type,evaluation_type,field_id:id,external_field,external_type,datetime_format,function_name,in_function,out_function,child_mapping_id:id,alternative_key
-fl_spreeconnect.spree130_product_product_weight,fl_spreeconnect.spree130_product_product,0,in_out,direct,product.field_product_template_weight,weight,float,,,,,,False
-fl_spreeconnect.spree130_product_product_cost_price,fl_spreeconnect.spree130_product_product,0,in_out,direct,product.field_product_template_standard_price,cost_price,float,,cost_price,"cost_price  = 0.0
+"id","mapping_id:id","sequence","type","evaluation_type","field_id:id","external_field","external_type","datetime_format","function_name","in_function","out_function","child_mapping_id:id","alternative_key"
+"fl_spreeconnect.spree130_product_product_weight","fl_spreeconnect.spree130_product_product",0,"in_out","direct","product.field_product_template_weight","weight","float",,,,,,"False"
+"fl_spreeconnect.spree130_product_product_cost_price","fl_spreeconnect.spree130_product_product",0,"in_out","direct","product.field_product_template_standard_price","cost_price","float",,"cost_price","cost_price  = 0.0
 if resource.get('variants'):
     variant = resource.get('variants')[0]
     cost_price = float(variant['cost_price'])
-result = [('standard_price','=',cost_price)]",,,False
-fl_spreeconnect.spree130_product_product_name,fl_spreeconnect.spree130_product_product,0,in_out,direct,product_variant_multi.field_product_product_name,name,unicode,,,,,,False
-fl_spreeconnect.spree130_product_product_sku,fl_spreeconnect.spree130_product_product,0,in_out,direct,product.field_product_product_default_code,sku,unicode,,,,,,False
-spree130_product_category_name,fl_spreeconnect.spree130_product_category,0,in_out,direct,product.field_product_category_name,name,unicode,,,,,,False
-spree130_sale_order_completed_at,fl_spreeconnect.spree130_sale_order,0,in_out,direct,sale.field_sale_order_date_order,completed_at,datetime,%Y-%m-%dT%H:%M:%SZ,,,,,False
-spree130_sale_order_gift_certificates_amount,fl_spreeconnect.spree130_sale_order,0,in,function,,,unicode,,gift_certificates_amount,"adj_discount_amount = 0
+result = [('standard_price','=',cost_price)]",,,"False"
+"fl_spreeconnect.spree130_product_product_name","fl_spreeconnect.spree130_product_product",0,"in_out","direct","product_variant_multi.field_product_product_name","name","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_product_product_sku","fl_spreeconnect.spree130_product_product",0,"in_out","direct","product.field_product_product_default_code","sku","unicode",,,,,,"False"
+"spree130_product_category_name","fl_spreeconnect.spree130_product_category",0,"in_out","direct","product.field_product_category_name","name","unicode",,,,,,"False"
+"spree130_sale_order_completed_at","fl_spreeconnect.spree130_sale_order",0,"in_out","direct","sale.field_sale_order_date_order","completed_at","datetime","%Y-%m-%dT%H:%M:%SZ",,,,,"False"
+"spree130_sale_order_gift_certificates_amount","fl_spreeconnect.spree130_sale_order",0,"in","function",,,"unicode",,"gift_certificates_amount","adj_discount_amount = 0
 for adjustment in resource.get('adjustments'):
     if adjustment.get('originator_type','') == 'Spree::PromotionAction':
         adj_discount_amount += abs(float(adjustment['amount']))
-result = [('gift_certificates_amount', adj_discount_amount)]",,,False
-spree130_sale_order_shipping_amount,fl_spreeconnect.spree130_sale_order,0,in,function,,,unicode,,shipping_amount,"shipping_amount = 0.0
+result = [('gift_certificates_amount', adj_discount_amount)]",,,"False"
+"spree130_sale_order_shipping_amount","fl_spreeconnect.spree130_sale_order",0,"in","function",,,"unicode",,"shipping_amount","shipping_amount = 0.0
 if resource.get('shipments', []):
     shipping_amount = sum(map(lambda s: float(s['cost']), resource['shipments']))
 result = [
     ('shipping_amount_tax_included',shipping_amount),
     ('shipping_amount_tax_excluded',shipping_amount),
     ('shipping_tax_rate',False)
-]",,,False
-spree130_sale_order_cash_on_delivery,fl_spreeconnect.spree130_sale_order,0,in,function,,,unicode,,cash_on_delivery,"adj_payment_amount = 0
+]",,,"False"
+"spree130_sale_order_cash_on_delivery","fl_spreeconnect.spree130_sale_order",0,"in","function",,,"unicode",,"cash_on_delivery","adj_payment_amount = 0
 for adjustment in resource.get('adjustments'):
     if adjustment.get('originator_type','') == 'Spree::PaymentMethod':
         adj_payment_amount += float(adjustment['amount'])
 result = [
     ('cash_on_delivery_amount_tax_excluded', adj_payment_amount),
     ('cash_on_delivery_amount_tax_included', adj_payment_amount)
-]",,,False
-fl_spreeconnect.spree130_sale_order_total,fl_spreeconnect.spree130_sale_order,0,in,direct,base_sale_multichannels.field_sale_order_ext_total_amount,total,float,,,,,,False
-fl_spreeconnect.spree130_sale_order_number,fl_spreeconnect.spree130_sale_order,0,in,direct,sale.field_sale_order_name,number,unicode,,,,,,True
-fl_spreeconnect.spree130_sale_order_payment_method_id,fl_spreeconnect.spree130_sale_order,0,in,function,sale_quick_payment.field_sale_order_payment_method_id,,unicode,,payment_method_id,"payment_id = None
+]",,,"False"
+"fl_spreeconnect.spree130_sale_order_total","fl_spreeconnect.spree130_sale_order",0,"in","direct","base_sale_multichannels.field_sale_order_ext_total_amount","total","float",,,,,,"False"
+"fl_spreeconnect.spree130_sale_order_number","fl_spreeconnect.spree130_sale_order",0,"in","direct","sale.field_sale_order_name","number","unicode",,,,,,"True"
+"fl_spreeconnect.spree130_sale_order_payment_method_id","fl_spreeconnect.spree130_sale_order",0,"in","function","sale_quick_payment.field_sale_order_payment_method_id",,"unicode",,"payment_method_id","payment_id = None
 payment_method_pool = self.pool.get('payment.method')
 if resource.get('payments'):
     for payment in resource.get('payments'):
@@ -41,8 +41,8 @@ if resource.get('payments'):
         payment_id = payment_method_pool.get_oeid(cr, uid, payment['payment_method']['id'], external_session.referential_id.id)
         if payment_id:
             break
-result = [('payment_method_id', payment_id)]",,,False
-fl_spreeconnect.spree130_sale_order_partner_id,fl_spreeconnect.spree130_sale_order,0,in,function,,,int,,user_id,"partner_id = False
+result = [('payment_method_id', payment_id)]",,,"False"
+"fl_spreeconnect.spree130_sale_order_partner_id","fl_spreeconnect.spree130_sale_order",0,"in","function",,,"int",,"user_id","partner_id = False
 if resource.get('user_id'):
     partner_id = self.pool.get('res.partner').get_oeid(cr, uid, resource['user_id'], 
         external_session.referential_id.id, context=context)
@@ -50,56 +50,64 @@ if resource.get('user_id'):
         res = self.pool.get('res.partner')._record_one_external_resource(cr, uid, external_session,
             resource, context=context)
         partner_id = res.get('write_id') or res.get('create_id')
-result=[('partner_id',partner_id)]",,,False
-fl_spreeconnect.spree130_sale_order_line_items,fl_spreeconnect.spree130_sale_order,100,in,sub-mapping,sale.field_sale_order_order_line,line_items,list,,,,,fl_spreeconnect.spree130_sale_order_line,False
-fl_spreeconnect.spree130_res_partner_address_Name,fl_spreeconnect.spree130_res_partner_address,0,in_out,function,,,unicode,,Name,"name = """"
+result=[('partner_id',partner_id)]",,,"False"
+"fl_spreeconnect.spree130_sale_order_line_items","fl_spreeconnect.spree130_sale_order",100,"in","sub-mapping","sale.field_sale_order_order_line","line_items","list",,,,,"fl_spreeconnect.spree130_sale_order_line","False"
+"fl_spreeconnect.spree130_res_partner_address_Name","fl_spreeconnect.spree130_res_partner_address",0,"in_out","function",,,"unicode",,"Name","name = """"
 if resource.get('firstname'):
     name = resource.get('firstname')
 if resource.get('lastname'):
     name = ""%s %s"" % (name, resource.get('lastname'))
 
-result = [('name',name)]",,,False
-fl_spreeconnect.spree130_res_partner_address_address2,fl_spreeconnect.spree130_res_partner_address,0,in_out,direct,base.field_res_partner_address_street2,address2,unicode,,,,,,False
-fl_spreeconnect.spree130_res_partner_address_city,fl_spreeconnect.spree130_res_partner_address,0,in_out,direct,base.field_res_partner_address_city,city,unicode,,,,,,False
-fl_spreeconnect.spree130_res_partner_address_zipcode,fl_spreeconnect.spree130_res_partner_address,0,in_out,direct,base.field_res_partner_address_zip,zipcode,unicode,,,,,,False
-fl_spreeconnect.spree130_res_partner_address_phone,fl_spreeconnect.spree130_res_partner_address,0,in_out,direct,base.field_res_partner_address_phone,phone,unicode,,,,,,False
-fl_spreeconnect.spree130_res_partner_address_type,fl_spreeconnect.spree130_res_partner_address,0,in_out,direct,base.field_res_partner_address_type,type,unicode,,,,,,False
-fl_spreeconnect.spree130_res_partner_address_address1,fl_spreeconnect.spree130_res_partner_address,0,in_out,direct,base.field_res_partner_address_street,address1,unicode,,,,,,False
-fl_spreeconnect.spree130_product_template_is_multi_variants,fl_spreeconnect.spree130_product_template,0,in,function,product_variant_multi.field_product_template_is_multi_variants,,unicode,,is_multi_variants,"multi_variants = False
+result = [('name',name)]",,,"False"
+"fl_spreeconnect.spree130_res_partner_address_address2","fl_spreeconnect.spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_street2","address2","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_res_partner_address_city","fl_spreeconnect.spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_city","city","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_res_partner_address_zipcode","fl_spreeconnect.spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_zip","zipcode","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_res_partner_address_phone","fl_spreeconnect.spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_phone","phone","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_res_partner_address_type","fl_spreeconnect.spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_type","type","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_res_partner_address_address1","fl_spreeconnect.spree130_res_partner_address",0,"in_out","direct","base.field_res_partner_address_street","address1","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_product_template_is_multi_variants","fl_spreeconnect.spree130_product_template",0,"in","function","product_variant_multi.field_product_template_is_multi_variants",,"unicode",,"is_multi_variants","multi_variants = False
 if resource.get('variants'):
     if len(resource.get('variants')) > 1:
         multi_variants = True
-result = [('is_multi_variants',multi_variants)]",,,False
-fl_spreeconnect.spree130_product_template_price,fl_spreeconnect.spree130_product_template,0,in_out,direct,product.field_product_template_list_price,price,unicode,,,,,,False
-fl_spreeconnect.spree130_product_template_categ_id,fl_spreeconnect.spree130_product_template,0,in_out,function,product.field_product_template_categ_id,,unicode,,categ_id,"value = []
+result = [('is_multi_variants',multi_variants)]",,,"False"
+"fl_spreeconnect.spree130_product_template_price","fl_spreeconnect.spree130_product_template",0,"in_out","direct","product.field_product_template_list_price","price","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_product_template_categ_id","fl_spreeconnect.spree130_product_template",0,"in_out","function",,,"unicode",,"categories","value = []
+category_ids = []
 if resource.get('taxon_ids'):
     taxon_ids = resource.get('taxon_ids')
     if taxon_ids[0]:
-        oerp_categ_id = self.pool.get('product.category').get_oeid(cr, uid, taxon_ids[0], external_session.referential_id.id)
-        value = [('categ_id',oerp_categ_id)]
-result = value",,,False
-fl_spreeconnect.spree130_product_template_name,fl_spreeconnect.spree130_product_template,0,in_out,direct,product.field_product_template_name,name,unicode,,,,,,False
-fl_spreeconnect.spree130_product_template_variants,fl_spreeconnect.spree130_product_template,5,in,function,,,list,,variants,"variant_ids = []
+        oerp_categ_id = self.pool.get('product.category').get_oeid(cr, uid, taxon_ids.pop(), external_session.referential_id.id)
+        value.append(('categ_id',oerp_categ_id))
+    for tax_id in taxon_ids:
+        oerp_categ_id = self.pool.get('product.category').get_oeid(cr, uid, tax_id, external_session.referential_id.id)
+        if oerp_categ_id:
+            category_ids.append(oerp_categ_id)
+    if category_ids:
+        value.append(('categ_ids',[(6,0, category_ids)]))
+print value
+result = value",,,"False"
+"fl_spreeconnect.spree130_product_template_name","fl_spreeconnect.spree130_product_template",0,"in_out","direct","product.field_product_template_name","name","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_product_template_variants","fl_spreeconnect.spree130_product_template",5,"in","function",,,"list",,"variants","variant_ids = []
 for variant in resource.get('variants', []):
     variant_res = self.pool.get('product.product')._record_one_external_resource(cr, uid, external_session,
         variant, context=context)
     variant_ids.append(variant_res.get('write_id') or variant_res.get('create_id'))
-result=[('variant_ids',[(6,0,variant_ids)])]",,,False
-fl_spreeconnect.spree130_res_partner_email,fl_spreeconnect.spree130_res_partner,0,in,direct,base.field_res_partner_name,email,unicode,,,,,,True
-spree130_sale_order_line_product_id,fl_spreeconnect.spree130_sale_order_line,0,in,function,,,unicode,,product_id,"product_id = False
+result=[('variant_ids',[(6,0,variant_ids)])]",,,"False"
+"fl_spreeconnect.spree130_res_partner_email","fl_spreeconnect.spree130_res_partner",0,"in","direct","base.field_res_partner_name","email","unicode",,,,,,"True"
+"spree130_sale_order_line_product_id","fl_spreeconnect.spree130_sale_order_line",0,"in","function",,,"unicode",,"product_id","product_id = False
 if resource['variant']['product_id']:
     product_tmpl_id = self.pool.get('product.template').get_or_create_oeid(cr, uid, external_session, 
         resource['variant']['product_id'], context=context)
 if resource.get('variant_id'):
     product_id = self.pool.get('product.product').get_oeid(cr, uid, resource['variant_id'], 
         external_session.referential_id.id, context=context)
-result=[('product_id',product_id)]",,,False
-fl_spreeconnect.spree130_sale_order_line_id,fl_spreeconnect.spree130_sale_order_line,0,in,direct,base_sale_multichannels.field_sale_order_line_ext_ref_line,id,int,,,,,,False
-fl_spreeconnect.spree130_sale_order_line_price,fl_spreeconnect.spree130_sale_order_line,0,in,direct,sale.field_sale_order_line_price_unit,price,float,,,,,,False
-fl_spreeconnect.spree130_sale_order_line_order_id,fl_spreeconnect.spree130_sale_order_line,0,in,direct,sale.field_sale_order_line_order_id,order_id,int,,,,,,False
-fl_spreeconnect.spree130_sale_order_line_quantity,fl_spreeconnect.spree130_sale_order_line,0,in_out,direct,sale.field_sale_order_line_product_uom_qty,quantity,float,,,,,,False
-fl_spreeconnect.spree130_account_tax_name,fl_spreeconnect.spree130_account_tax,0,in_out,direct,account.field_account_tax_name,name,unicode,,,,,,False
-fl_spreeconnect.spree130_account_tax_amount,fl_spreeconnect.spree130_account_tax,0,in_out,direct,account.field_account_tax_amount,amount,float,,,,,,False
-fl_spreeconnect.spree130_res_country_name,fl_spreeconnect.spree130_res_country,0,in_out,direct,base.field_res_country_name,name,unicode,,,,,,False
-fl_spreeconnect.spree130_res_country_iso,fl_spreeconnect.spree130_res_country,0,in,direct,base.field_res_country_code,iso,unicode,,,,,,False
-fl_spreeconnect.spree130_payment_method_name,fl_spreeconnect.spree130_payment_method,0,in,direct,sale_quick_payment.field_payment_method_name,name,unicode,,,,,,False
+result=[('product_id',product_id)]",,,"False"
+"fl_spreeconnect.spree130_sale_order_line_id","fl_spreeconnect.spree130_sale_order_line",0,"in","direct","base_sale_multichannels.field_sale_order_line_ext_ref_line","id","int",,,,,,"False"
+"fl_spreeconnect.spree130_sale_order_line_price","fl_spreeconnect.spree130_sale_order_line",0,"in","direct","sale.field_sale_order_line_price_unit","price","float",,,,,,"False"
+"fl_spreeconnect.spree130_sale_order_line_order_id","fl_spreeconnect.spree130_sale_order_line",0,"in","direct","sale.field_sale_order_line_order_id","order_id","int",,,,,,"False"
+"fl_spreeconnect.spree130_sale_order_line_quantity","fl_spreeconnect.spree130_sale_order_line",0,"in_out","direct","sale.field_sale_order_line_product_uom_qty","quantity","float",,,,,,"False"
+"fl_spreeconnect.spree130_account_tax_name","fl_spreeconnect.spree130_account_tax",0,"in_out","direct","account.field_account_tax_name","name","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_account_tax_amount","fl_spreeconnect.spree130_account_tax",0,"in_out","direct","account.field_account_tax_amount","amount","float",,,,,,"False"
+"fl_spreeconnect.spree130_res_country_name","fl_spreeconnect.spree130_res_country",0,"in_out","direct","base.field_res_country_name","name","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_res_country_iso","fl_spreeconnect.spree130_res_country",0,"in","direct","base.field_res_country_code","iso","unicode",,,,,,"False"
+"fl_spreeconnect.spree130_payment_method_name","fl_spreeconnect.spree130_payment_method",0,"in","direct","sale_quick_payment.field_payment_method_name","name","unicode",,,,,,"False"
