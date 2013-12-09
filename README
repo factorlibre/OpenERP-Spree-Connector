@@ -8,3 +8,8 @@ https://code.launchpad.net/~extra-addons-commiter/openobject-extension/oerp6.1-s
 
 To Use with variants is also required:
 https://code.launchpad.net/~product-core-editors/openerp-product-variant/extraction-61
+
+In Spree Gemfile:
+
+gem 'spree_api_extensions', github: 'hugosantosred/spree_api_extensions', :branch => '2-0-stable'
+
