@@ -95,7 +95,7 @@ class external_referential(osv.osv):
         oe_list_dict = oe_obj.read(cr, uid, oe_ids, fields_to_read, context=context)
         #print "oe_list_dict=", oe_list_dict
 
-        ext_resources = oe_obj._get_external_resources(cr, uid, external_session, context=context)
+        ext_resources = oe_obj._get_external_resources_complete(cr, uid, external_session, context=context)
         ext_resources_list = []
         if isinstance(ext_resources, list):
             ext_resources_list = ext_resources
@@ -108,7 +108,7 @@ class external_referential(osv.osv):
                 while page < total_pages:
                     ext_resources_list += ext_resources.get(external_resource_name, [])
                     page += 1
-                    ext_resources = oe_obj._get_external_resources(cr, uid, external_session, params={'page': page}, context=context)
+                    ext_resources = oe_obj._get_external_resources_complete(cr, uid, external_session, resource_filter={'page': page}, context=context)
         else:
             ext_resources_list.append(ext_resources)
 
