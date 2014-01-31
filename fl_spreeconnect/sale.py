@@ -112,6 +112,17 @@ sale_shop()
 class sale_order(Model):
     _inherit = 'sale.order'
 
+    @only_for_referential('spree')
+    def check_if_order_exist(self, cr, uid, external_session, resource, order_mapping=None, defaults=None, context=None):
+        shop = external_session.sync_from_object
+        order_name = '%s%s' %(shop.order_prefix, resource['number'])
+        exist_id = self.search(cr, uid, [['name', '=', order_name]], context=context)
+        if exist_id:
+            external_session.logger.info("Sale Order %s already exist in OpenERP,"
+                                            "no need to import it again"%order_name)
+            return True
+        return False
+
     def add_adjustment_line(self, cr, uid, resource, context=None):
         taxes = []
         for adj in resource.get('adjustments', []):

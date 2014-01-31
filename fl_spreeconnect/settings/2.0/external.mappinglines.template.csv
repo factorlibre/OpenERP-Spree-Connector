@@ -1,10 +1,10 @@
 id,mapping_id:id,sequence,type,evaluation_type,field_id:id,external_field,external_type,datetime_format,function_name,in_function,out_function,child_mapping_id:id,alternative_key
+fl_spreeconnect.spree200_product_product_weight,fl_spreeconnect.spree200_product_product,0,in_out,direct,product.field_product_template_weight,weight,float,,,,,,False
 fl_spreeconnect.spree200_product_product_cost_price,fl_spreeconnect.spree200_product_product,0,in_out,direct,product.field_product_template_standard_price,cost_price,float,,cost_price,"cost_price  = 0.0
 if resource.get('variants'):
     variant = resource.get('variants')[0]
     cost_price = float(variant['cost_price'])
 result = [('standard_price','=',cost_price)]",,,False
-fl_spreeconnect.spree200_product_product_weight,fl_spreeconnect.spree200_product_product,0,in_out,direct,product.field_product_template_weight,weight,float,,,,,,False
 fl_spreeconnect.spree200_product_product_name,fl_spreeconnect.spree200_product_product,0,in_out,direct,product_variant_multi.field_product_product_name,name,unicode,,,,,,False
 fl_spreeconnect.spree200_product_product_sku,fl_spreeconnect.spree200_product_product,0,in_out,direct,product.field_product_product_default_code,sku,unicode,,,,,,False
 spree200_product_product_Variants,fl_spreeconnect.spree200_product_product,10,in,function,,,unicode,,Variants,"dimension_option_pool = self.pool.get(""product.variant.dimension.option"")
@@ -39,12 +39,6 @@ for option in resource.get('option_values'):
     
 result = [('dimension_value_ids',[(6,0,dimension_values_ids)]),('variants',variant_name)]",,,False
 fl_spreeconnect.spree200_product_category_name,fl_spreeconnect.spree200_product_category,0,in_out,direct,product.field_product_category_name,name,unicode,,,,,,False
-fl_spreeconnect.spree200_sale_order_completed_at,fl_spreeconnect.spree200_sale_order,0,in_out,direct,sale.field_sale_order_date_order,completed_at,datetime,%Y-%m-%dT%H:%M:%SZ,,,,,False
-fl_spreeconnect.spree200_sale_order_gift_certificates_amount,fl_spreeconnect.spree200_sale_order,0,in,function,,,unicode,,gift_certificates_amount,"adj_discount_amount = 0
-for adjustment in resource.get('adjustments'):
-    if adjustment.get('originator_type','') == 'Spree::PromotionAction':
-        adj_discount_amount += abs(float(adjustment['amount']))
-result = [('gift_certificates_amount', adj_discount_amount)]",,,False
 fl_spreeconnect.spree200_sale_order_shipping_amount,fl_spreeconnect.spree200_sale_order,0,in,function,,,unicode,,shipping_amount,"shipping_amount = 0.0
 if resource.get('shipments', []):
     shipping_amount = sum(map(lambda s: float(s['cost']), resource['shipments']))
@@ -53,6 +47,17 @@ result = [
     ('shipping_amount_tax_excluded',shipping_amount),
     ('shipping_tax_rate',False)
 ]",,,False
+fl_spreeconnect.spree200_sale_order_completed_at,fl_spreeconnect.spree200_sale_order,0,in,function,sale.field_sale_order_date_order,,unicode,,date_order,"import dateutil.parser
+date_order = False
+if resource.get('completed_at'):
+    date_order = dateutil.parser.parse(resource['completed_at'])
+
+result = [('date_order',date_order)]",,,False
+fl_spreeconnect.spree200_sale_order_gift_certificates_amount,fl_spreeconnect.spree200_sale_order,0,in,function,,,unicode,,gift_certificates_amount,"adj_discount_amount = 0
+for adjustment in resource.get('adjustments'):
+    if adjustment.get('originator_type','') == 'Spree::PromotionAction':
+        adj_discount_amount += abs(float(adjustment['amount']))
+result = [('gift_certificates_amount', adj_discount_amount)]",,,False
 fl_spreeconnect.spree200_sale_order_cash_on_delivery,fl_spreeconnect.spree200_sale_order,0,in,function,,,unicode,,cash_on_delivery,"adj_payment_amount = 0
 for adjustment in resource.get('adjustments'):
     if adjustment.get('originator_type','') == 'Spree::PaymentMethod':
