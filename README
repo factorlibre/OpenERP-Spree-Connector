@@ -11,5 +11,5 @@ https://code.launchpad.net/~product-core-editors/openerp-product-variant/extract
 
 In Spree Gemfile:
 
-gem 'spree_api_extensions', github: 'hugosantosred/spree_api_extensions', :branch => '2-0-stable'
+gem 'spree_api_extensions', github: 'hugosantosred/spree_api_extensions', :branch => '2-1-stable'
 
