@@ -156,8 +156,10 @@ class external_referential(osv.osv):
         cur_referential = self.browse(cr, uid, ids[0], context=context)
         external_session = ExternalSession(cur_referential)
 
+        account_tax_pool = self.pool.get('account.tax')
+
         self._bidirectional_synchro(cr, uid, external_session, obj_readable_name='TAXES',
-            oe_obj=self.pool.get('account.tax'),
+            oe_obj=account_tax_pool,
             spree_field='amount', spree_readable_field='name',
             oe_field='amount',
             oe_readable_field='type_tax_use',
@@ -171,6 +173,23 @@ class external_referential(osv.osv):
             compare_function=self._compare_countries, context=context)
 
         self.import_resources(cr, uid, ids, 'payment.method', method='search_read_no_loop', context=context)
+
+        #Update tax groups
+        tax_resource_list = account_tax_pool._get_external_resources(cr, 
+            uid, external_session, context=context)
+        for tax_resource in tax_resource_list:
+            if tax_resource.get('tax_category'):
+                tax_category_id = self.pool.get('account.tax.group').get_or_create_oeid_from_resource(
+                    cr, uid, external_session, 
+                    tax_resource['tax_category'], context=context
+                )
+
+                if tax_category_id:
+                    tax_id = account_tax_pool.get_oeid(cr, uid, tax_resource['id'], 
+                        cur_referential.id, context=context)
+                    if tax_id:
+                        account_tax_pool.write(cr, uid, [tax_id], 
+                            {'group_id': tax_category_id}, context=context)
 
         return True
 
